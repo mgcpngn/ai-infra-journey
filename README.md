@@ -28,8 +28,8 @@
 | 步 | 主题 | 要搞懂的问题 | 和推理 Infra 的关系 | 状态 |
 | --- | --- | --- | --- | --- |
 | 1 | [梯度下降拟合直线](stage0/01-linear-fit/) | 参数、loss、梯度、学习率 | 模型就是一堆数字，推理只用它们做前向计算 | ✅ 已过关 |
-| 2 | [两层神经网络识别手写数字](stage0/02-mnist-mlp/) | 多层、激活函数、反向传播 | 每一层都是矩阵乘（GEMM），推理最主要的算子 | 🔄 进行中 |
-| 3 | 唐诗 bigram 语言模型 | token、预测下一个字、softmax、采样 | 一次只出一个 token，这就是 decode 循环 | ⏳ |
+| 2 | [两层神经网络识别手写数字](stage0/02-mnist-mlp/) | 多层、激活函数、反向传播 | 每一层都是矩阵乘（GEMM），推理最主要的算子 | ✅ 已过关 |
+| 3 | [唐诗 bigram 语言模型](stage0/03-bigram/) | token、预测下一个字、softmax、采样 | 一次只出一个 token，这就是 decode 循环 | 🔄 进行中 |
 | 4 | 小 GPT（约 1000 万参数） | 自注意力、为什么能看长上下文 | attention 显存随长度平方增长，FlashAttention 要解决的问题 | ⏳ |
 | 5 | 给自己的模型做推理优化 | KV cache、prefill/decode、batch、量化 | TTFT、TPOT、吞吐的来源 | ⏳ |
 | 6 | LoRA 微调 Qwen3-0.6B | 预训练、全量微调、LoRA | 客户常要部署微调模型，vLLM 可挂 LoRA | ⏳ |

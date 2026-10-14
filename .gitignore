@@ -1,0 +1,8 @@
+# 数据集与训练产物
+data/
+*.pt
+*.pth
+*.safetensors
+checkpoints/
+__pycache__/
+.venv/

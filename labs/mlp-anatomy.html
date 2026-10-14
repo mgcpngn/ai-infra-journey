@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>神经网络解剖台</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@600;800&family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: same engineering-notebook sheet as the gradient lab — a big network diagram with a size dial, then the training-vs-inference timeline, then a cross-entropy dial, then plain answers. */
+:root {
+  --paper: #F3F6F7; --sheet: #FFFFFF; --ink: #15222B; --muted: #5B6B75; --grid: #DCE4E8;
+  --line: #0E7C7B; --dot: #6E8796; --grad: #C46A00; --bad: #C2362F; --ok: #2F8A4C;
+  --font-display: "Noto Serif SC", "Songti SC", serif;
+  --font-body: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --paper: #0F171C; --sheet: #16222A; --ink: #E3EBEF; --muted: #93A5B0; --grid: #26353F;
+  --line: #3CC6C2; --dot: #7F9AAA; --grad: #F0A23B; --bad: #F06A60; --ok: #5CC27E; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --paper: #0F171C; --sheet: #16222A; --ink: #E3EBEF; --muted: #93A5B0; --grid: #26353F;
+  --line: #3CC6C2; --dot: #7F9AAA; --grad: #F0A23B; --bad: #F06A60; --ok: #5CC27E; color-scheme: dark; }
+
+body { background: var(--paper); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.7; }
+.wrap { max-width: 1080px; margin: 0 auto; padding-inline: 16px; padding-block: 28px 64px; display: grid; gap: 32px; }
+h1, h2 { font-family: var(--font-display); text-wrap: balance; margin: 0; line-height: 1.3; }
+h1 { font-size: clamp(26px, 4.4vw, 38px); font-weight: 800; }
+h2 { font-size: 22px; font-weight: 600; }
+p { margin: 0; }
+.lede { max-width: 65ch; color: var(--muted); margin-top: 8px; }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+section { display: grid; gap: 12px; }
+.panel { background: var(--sheet); border: 1px solid var(--grid); border-radius: 6px; padding: 14px; min-width: 0; }
+.label { font-size: 12px; letter-spacing: .06em; color: var(--muted); margin-bottom: 6px; }
+.cap { font-size: 13px; color: var(--muted); max-width: 70ch; }
+canvas { width: 100%; display: block; }
+#cNet { aspect-ratio: 16 / 8; }
+.two { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 16px; }
+.dial { display: grid; gap: 10px; }
+.dial-row { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.dial-val { font-family: var(--font-mono); font-size: 22px; font-weight: 600; color: var(--grad); }
+input[type=range] { width: 100%; accent-color: var(--grad); }
+input:focus-visible { outline: 2px solid var(--line); outline-offset: 2px; }
+.calc { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 14px; display: grid; gap: 4px; }
+.calc .r { display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px dashed var(--grid); padding-block: 4px; }
+.calc .r span:first-child { color: var(--muted); font-family: var(--font-body); }
+.calc .tot { font-weight: 600; font-size: 16px; }
+.note { font-size: 13px; background: var(--paper); border-radius: 4px; padding: 8px 10px; }
+
+.tl { display: grid; gap: 14px; }
+.tl-row { display: grid; grid-template-columns: 70px minmax(0, 1fr) 90px; align-items: center; gap: 10px; }
+.tl-name { font-weight: 700; font-size: 14px; }
+.tl-bar { display: flex; height: 38px; border-radius: 4px; overflow: hidden; }
+.tl-bar div { display: flex; align-items: center; justify-content: center; font-size: 12px; color: var(--sheet); white-space: nowrap; overflow: hidden; }
+.b-fwd { background: var(--line); }
+.b-loss { background: var(--dot); }
+.b-bwd { background: var(--grad); }
+.b-upd { background: var(--ink); }
+.tl-t { font-family: var(--font-mono); font-size: 13px; color: var(--muted); text-align: right; }
+.steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.step { border-top: 3px solid var(--grid); padding-top: 8px; font-size: 14px; }
+.step b { display: block; margin-bottom: 2px; }
+.step.s1 { border-color: var(--line); } .step.s2 { border-color: var(--dot); } .step.s3 { border-color: var(--grad); } .step.s4 { border-color: var(--ink); }
+.step i { font-style: normal; color: var(--muted); font-size: 13px; display: block; margin-top: 4px; }
+
+#cCE { aspect-ratio: 16 / 7; }
+
+.qa { max-width: 780px; }
+.qa details { border-top: 1px solid var(--grid); padding-block: 12px; }
+.qa details:last-child { border-bottom: 1px solid var(--grid); }
+.qa summary { cursor: pointer; font-weight: 700; list-style: none; display: flex; gap: 10px; }
+.qa summary::before { content: "+"; font-family: var(--font-mono); color: var(--grad); width: 1ch; flex: none; }
+.qa details[open] summary::before { content: "−"; }
+.qa p { margin: 8px 0 0 calc(1ch + 10px); max-width: 65ch; }
+.qa p + p { margin-top: 6px; }
+code { font-family: var(--font-mono); font-size: .92em; background: var(--paper); padding: 0 4px; border-radius: 3px; }
+.qa code { background: var(--sheet); }
+pre { font-family: var(--font-mono); font-size: 13px; background: var(--sheet); border: 1px solid var(--grid); border-radius: 6px; padding: 12px; overflow-x: auto; white-space: pre-wrap; margin: 0; }
+.check ol { margin: 0; padding-left: 22px; max-width: 65ch; display: grid; gap: 8px; }
+
+@media (max-width: 760px) {
+  .two { grid-template-columns: minmax(0, 1fr); }
+  .steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tl-row { grid-template-columns: 54px minmax(0, 1fr) 70px; }
+  #cNet { aspect-ratio: 4 / 3; }
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>神经网络解剖台</h1>
+    <p class="lede">你的理解基本对：28×28 的图片拉平成 784 个数，经过 128 个中间神经元，最后输出 0–9 各自的概率，所以它是一个分类器。这一页把这个网络画出来，数清它有多少个 w 和 b，再把训练的四件事拆开计时。</p>
+  </header>
+
+  <section>
+    <h2>网络长什么样</h2>
+    <div class="two">
+      <div class="panel">
+        <canvas id="cNet" aria-label="784 到隐藏层到 10 的网络示意图"></canvas>
+        <p class="cap" style="margin-top:8px">图里只画出了一部分神经元和连线。真实情况是每个中间神经元都连着全部 784 个像素，每个输出神经元都连着全部中间神经元。每一根连线就是一个 w。</p>
+      </div>
+      <div class="panel dial">
+        <div class="dial-row"><label for="hid">中间层大小</label><span class="dial-val" id="hidVal">128</span></div>
+        <input type="range" id="hid" min="0" max="6" step="1" value="3">
+        <div class="calc">
+          <div class="r"><span>第 1 层的 w：784 × <b class="h">128</b></span><span id="w1"></span></div>
+          <div class="r"><span>第 1 层的 b：每个神经元 1 个</span><span id="b1"></span></div>
+          <div class="r"><span>第 2 层的 w：<b class="h">128</b> × 10</span><span id="w2"></span></div>
+          <div class="r"><span>第 2 层的 b</span><span id="b2"></span></div>
+          <div class="r tot"><span>参数总数</span><span id="tot"></span></div>
+          <div class="r"><span>占用空间（float32，每个 4 字节）</span><span id="bytes"></span></div>
+          <div class="r"><span>识别一张图要做的乘加次数</span><span id="macs"></span></div>
+        </div>
+        <p class="note">每个中间神经元做的事，和第 1 步的 y = w·x + b 一模一样，只是 x 从 1 个数变成了 784 个数，所以有 784 个 w 和 1 个 b。128 个这样的神经元并排，就是一次矩阵乘法。</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>训练一步 vs 推理一次</h2>
+    <div class="panel tl">
+      <div class="tl-row"><span class="tl-name">训练</span>
+        <div class="tl-bar" aria-label="训练一步的耗时构成">
+          <div class="b-fwd" style="flex:1">前向</div><div class="b-loss" style="flex:.12"></div><div class="b-bwd" style="flex:2">反向求梯度</div><div class="b-upd" style="flex:.2"></div>
+        </div><span class="tl-t">约 3 份</span></div>
+      <div class="tl-row"><span class="tl-name">推理</span>
+        <div class="tl-bar" style="width: calc(100% * 1 / 3.32)" aria-label="推理一次的耗时构成">
+          <div class="b-fwd" style="flex:1">前向</div>
+        </div><span class="tl-t">约 1 份</span></div>
+      <div class="steps">
+        <div class="step s1"><b>1 前向</b>用当前的 w、b 算出 10 个概率。<i>像射出一箭</i></div>
+        <div class="step s2"><b>2 算 loss</b>正确答案的概率有多低，打一个分数。只是一个数，不改任何东西。<i>看箭偏了多少</i></div>
+        <div class="step s3"><b>3 反向求梯度</b>对 101,770 个参数逐个算出：往哪边拧一点，loss 会变小。<i>想清楚姿势该怎么调</i></div>
+        <div class="step s4"><b>4 更新</b>每个参数按梯度拧一小下（乘学习率）。<i>真的调整姿势</i></div>
+      </div>
+      <p class="cap">反向这一步大约是前向的 2 倍工作量，因为每一层都要算两个东西：给参数的梯度，和传给上一层的梯度。所以训练一步大约是推理一次的 3 倍。推理还不用保存中间结果，显存也省很多。</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>交叉熵：给「猜得有多自信」打分</h2>
+    <div class="two">
+      <div class="panel"><canvas id="cCE" aria-label="10 个数字的预测概率条形图"></canvas></div>
+      <div class="panel dial">
+        <div class="dial-row"><label for="pc">模型给正确答案「3」的概率</label><span class="dial-val" id="pcVal">0.60</span></div>
+        <input type="range" id="pc" min="1" max="99" step="1" value="60">
+        <div class="calc">
+          <div class="r"><span>是否猜对（准确率只看这个）</span><span id="right"></span></div>
+          <div class="r tot"><span>交叉熵 loss = −ln(p)</span><span id="ce"></span></div>
+        </div>
+        <p class="note">准确率只分对错，猜对时 0.51 和 0.99 没有区别。交叉熵会区分：越自信地猜对，loss 越接近 0；把正确答案的概率压得越低，loss 涨得越快。训练要最小化的是交叉熵，准确率只是给人看的成绩单。</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>你的问题</h2>
+    <div class="qa">
+      <details open><summary>算 loss 和求梯度到底有什么区别？算 loss 是不是就在找 w、b？</summary>
+        <p>不是。算 loss 不改变也不寻找任何参数，它只给当前这组 w、b 打一个分：错得有多离谱。真正「找」的动作在第 3、4 件事里：先求梯度，算出每个参数往哪边拧能让分数变好；再更新，真的拧一下。</p>
+        <p>用射箭来比：前向是射出一箭，loss 是量一下偏了几厘米，梯度是想明白手该往左还是往右、往上还是往下，更新是真的挪手。重复几千次，箭就越来越准。</p></details>
+      <details><summary>为什么中间层是 128，不是 64 或 188？</summary>
+        <p>这是人定的，叫「超参数」，没有公式算得出来。大一些能学到更多特征，但参数和计算量都会变多，也更容易死记训练数据（过拟合）。小一些更快，但可能学不够。拖动上面的滑块，就能看到参数量和计算量怎么变。</p>
+        <p>选 64、128、256 这类 2 的幂，是因为 GPU 做矩阵乘法时按 8、16、64、128 这样的块来切分。尺寸对齐，硬件跑得更满。188 也能跑，只是会浪费一部分算力。这是你第一次碰到「模型设计要迁就硬件」，以后在推理 Infra 里会反复遇到。</p></details>
+      <details><summary>交叉熵是预测的准确率吗？像人脸、车牌识别那样的匹配度概率？</summary>
+        <p>接近，但不一样。模型输出的 10 个概率，确实就是你说的「匹配度」。交叉熵是在这个基础上打的分：只看正确答案拿到多少概率，取 −ln。拖动上面的滑块就能看到它和准确率的区别。</p></details>
+      <details><summary>去掉激活函数后准确率掉了，为什么？</summary>
+        <p>你的解释是对的：中间层失效了。原因是两次乘法可以合并成一次。784 → 128 → 10 如果全是线性的，数学上就等于直接 784 → 10，中间那 128 层白加了。激活函数（ReLU 把负数变成 0）在中间「掰弯」一下，两层才不能合并，网络才能拼出弯曲的形状。这就是第 1 步里「直线再多也只能拼出直线」的实验证据。</p>
+        <p>通常的结果是：有激活约 97–98%，没有激活约 92%。你看到的「掉了 0.2」如果是 0.2 个百分点，可能是训练轮数太少，可以把两次的完整准确率发给我看看。</p></details>
+      <details><summary>训练和推理时间差几倍，怎么看？</summary>
+        <p>让 Agent 把结果打印成一行对比就行，见下面的提示词。预期训练一个 batch 是推理的 2–4 倍。比值偏大很正常，因为这个网络太小，GPU 大部分时间在等调度，而不是在算。这个现象以后会在推理 Infra 里再遇到：模型小、batch 小时，瓶颈不在算力。</p></details>
+      <details><summary>这个网络有多少个参数？</summary>
+        <p>101,770 个。第 1 层 784 × 128 个 w 加 128 个 b，共 100,480；第 2 层 128 × 10 个 w 加 10 个 b，共 1,290。用 float32 存约 0.4 MB。对比一下：一个 8B 大模型的参数量是它的约 8 万倍，用 bf16 存约 16 GB，这就是你的 8GB 显卡装不下它的原因。</p></details>
+    </div>
+  </section>
+
+  <section>
+    <h2>补一段提示词</h2>
+    <p class="cap">发给 Claude Code，让它在你现有的 mnist_mlp.py 上加两处打印：</p>
+<pre>在 mnist_mlp.py 里加两处输出，不改其他逻辑：
+1. 训练开始前，逐层打印：层名、权重形状、偏置形状、该层参数量，最后打印总参数量。
+2. 训练结束后，用同一个 batch 各测 100 次取平均，打印一行：
+   「训练一个 batch：X ms，推理一个 batch：Y ms，比值：Z」
+   推理要放在 torch.no_grad() 里，计时前后都要 torch.cuda.synchronize()。
+再加一个参数 --hidden，让我可以把中间层改成 16、128、512 对比。</pre>
+  </section>
+
+  <section class="check">
+    <h2>第 2 步过关题</h2>
+    <ol>
+      <li>用一句话说出 loss 和梯度的区别。可以用射箭的比喻，也可以用自己的。</li>
+      <li>用 --hidden 512 跑一次，参数量变成多少？准确率和训练时间怎么变？</li>
+      <li>你打印出来的训练/推理时间比值是多少？用「前向、反向、更新」解释为什么是这个数。</li>
+    </ol>
+    <p class="cap">答完就进第 3 步：用唐诗训练一个最简单的语言模型，看模型怎么「说话」。</p>
+  </section>
+</div>
+
+<script>
+(function () {
+  const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  function prep(id) {
+    const c = document.getElementById(id), r = c.getBoundingClientRect(), d = window.devicePixelRatio || 1;
+    c.width = Math.max(1, Math.round(r.width * d)); c.height = Math.max(1, Math.round(r.height * d));
+    const g = c.getContext('2d'); g.setTransform(d, 0, 0, d, 0, 0); return { g, W: r.width, H: r.height };
+  }
+  const sizes = [16, 32, 64, 128, 256, 512, 1024];
+  const hidEl = document.getElementById('hid');
+  const pcEl = document.getElementById('pc');
+  const nf = n => n.toLocaleString('en-US');
+
+  // a hand-drawn "3" on a 28x28 grid
+  const digit = Array.from({ length: 28 }, () => new Array(28).fill(0));
+  const strokes = [[7,8,20,8],[19,8,21,10],[21,10,21,12],[21,12,18,14],[18,14,12,14],[18,14,21,16],[21,16,21,19],[21,19,19,21],[19,21,7,21]];
+  strokes.forEach(([x0, y0, x1, y1]) => { const n = 40; for (let i = 0; i <= n; i++) { const x = x0 + (x1 - x0) * i / n, y = y0 + (y1 - y0) * i / n; for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) { const xx = Math.round(x + dx * .7), yy = Math.round(y + dy * .7); if (xx >= 0 && xx < 28 && yy >= 0 && yy < 28) digit[yy][xx] = Math.max(digit[yy][xx], dx === 0 && dy === 0 ? 1 : .55); } } });
+
+  function drawNet() {
+    const h = sizes[+hidEl.value];
+    const { g, W, H } = prep('cNet'); g.clearRect(0, 0, W, H);
+    const ink = css('--ink'), muted = css('--muted'), grid = css('--grid'), line = css('--line'), grad = css('--grad'), dot = css('--dot');
+    const font = css('--font-body'), mono = css('--font-mono');
+    const narrow = W < 520;
+    // input image
+    const img = Math.min(H * .42, W * .18), ix = 8, iy = (H - img) / 2 - 10, cell = img / 28;
+    for (let y = 0; y < 28; y++) for (let x = 0; x < 28; x++) { g.fillStyle = digit[y][x] ? ink : grid; g.globalAlpha = digit[y][x] ? digit[y][x] : .5; g.fillRect(ix + x * cell, iy + y * cell, cell - .3, cell - .3); }
+    g.globalAlpha = 1;
+    g.fillStyle = muted; g.font = '12px ' + font; g.textAlign = 'center';
+    g.fillText('28×28 图片', ix + img / 2, iy + img + 16);
+    // columns
+    const colIn = ix + img + W * .1, colHid = W * (narrow ? .6 : .58), colOut = W - (narrow ? 34 : 60);
+    const top = 26, bot = H - 30;
+    const nIn = 14, nHid = Math.min(12, Math.max(4, Math.round(Math.log2(h) * 1.4))), nOut = 10;
+    const ys = (n, a, b) => Array.from({ length: n }, (_, i) => a + (b - a) * (n === 1 ? .5 : i / (n - 1)));
+    const yIn = ys(nIn, top, bot), yHid = ys(nHid, top + 10, bot - 10), yOut = ys(nOut, top + 20, bot - 20);
+    // flatten arrow
+    g.strokeStyle = muted; g.lineWidth = 1; g.setLineDash([3, 3]);
+    g.beginPath(); g.moveTo(ix + img + 4, H / 2 - 10); g.lineTo(colIn - 10, H / 2 - 10); g.stroke(); g.setLineDash([]);
+    // edges
+    g.globalAlpha = .18; g.strokeStyle = line;
+    yIn.forEach(a => yHid.forEach(b => { g.beginPath(); g.moveTo(colIn, a); g.lineTo(colHid, b); g.stroke(); }));
+    g.strokeStyle = grad;
+    yHid.forEach(a => yOut.forEach(b => { g.beginPath(); g.moveTo(colHid, a); g.lineTo(colOut, b); g.stroke(); }));
+    g.globalAlpha = 1;
+    // nodes
+    const node = (x, y, r, c) => { g.fillStyle = css('--sheet'); g.beginPath(); g.arc(x, y, r, 0, 7); g.fill(); g.strokeStyle = c; g.lineWidth = 1.5; g.stroke(); };
+    yIn.forEach((y, i) => { if (i === 6 || i === 7) return; node(colIn, y, 4, dot); });
+    g.fillStyle = muted; g.font = '14px ' + mono; g.textAlign = 'center'; g.fillText('⋮', colIn, (yIn[6] + yIn[7]) / 2 + 5);
+    yHid.forEach(y => node(colHid, y, 6, line));
+    const probs = [.01, .01, .03, .82, .01, .05, .01, .02, .03, .01];
+    yOut.forEach((y, i) => { node(colOut, y, 6, grad); g.fillStyle = ink; g.font = '11px ' + mono; g.textAlign = 'left'; g.fillText(String(i), colOut + 10, y + 4); if (!narrow) { g.fillStyle = grad; g.globalAlpha = .7; g.fillRect(colOut + 22, y - 4, probs[i] * 34, 8); g.globalAlpha = 1; } });
+    // labels
+    g.fillStyle = ink; g.font = '600 13px ' + font; g.textAlign = 'center';
+    g.fillText('输入 784', colIn, 14); g.fillText('中间层 ' + h, colHid, 14); g.fillText('输出 10', colOut, 14);
+    g.fillStyle = muted; g.font = '12px ' + font;
+    g.fillText(nf(784 * h) + ' 根连线', (colIn + colHid) / 2, H - 8);
+    g.fillText(nf(h * 10) + ' 根', (colHid + colOut) / 2, H - 8);
+    g.fillText('ReLU', colHid, bot + 10 > H - 20 ? H - 22 : bot + 16);
+  }
+
+  function updateCalc() {
+    const h = sizes[+hidEl.value];
+    document.getElementById('hidVal').textContent = h;
+    document.querySelectorAll('.h').forEach(e => e.textContent = h);
+    const w1 = 784 * h, b1 = h, w2 = h * 10, b2 = 10, tot = w1 + b1 + w2 + b2;
+    document.getElementById('w1').textContent = nf(w1);
+    document.getElementById('b1').textContent = nf(b1);
+    document.getElementById('w2').textContent = nf(w2);
+    document.getElementById('b2').textContent = nf(b2);
+    document.getElementById('tot').textContent = nf(tot);
+    const kb = tot * 4 / 1024;
+    document.getElementById('bytes').textContent = kb > 1024 ? (kb / 1024).toFixed(2) + ' MB' : kb.toFixed(0) + ' KB';
+    document.getElementById('macs').textContent = nf(w1 + w2);
+    drawNet();
+  }
+
+  function drawCE() {
+    const p = +pcEl.value / 100;
+    document.getElementById('pcVal').textContent = p.toFixed(2);
+    const others = [.18, .06, .1, .05, .2, .08, .12, .09, .12]; // shares of the rest
+    const probs = []; let k = 0;
+    for (let i = 0; i < 10; i++) probs.push(i === 3 ? p : others[k++] * (1 - p));
+    const maxOther = Math.max(...probs.filter((_, i) => i !== 3));
+    const right = p > maxOther;
+    const r = document.getElementById('right'); r.textContent = right ? '猜对（3 的概率最高）' : '猜错'; r.style.color = right ? css('--ok') : css('--bad');
+    document.getElementById('ce').textContent = (-Math.log(p)).toFixed(3);
+    const { g, W, H } = prep('cCE'); g.clearRect(0, 0, W, H);
+    const pad = { l: 34, r: 8, t: 12, b: 24 }, bw = (W - pad.l - pad.r) / 10;
+    const sy = v => H - pad.b - v * (H - pad.t - pad.b);
+    g.strokeStyle = css('--grid'); g.fillStyle = css('--muted'); g.font = '11px ' + css('--font-mono'); g.textAlign = 'right';
+    [0, .5, 1].forEach(v => { g.beginPath(); g.moveTo(pad.l, sy(v)); g.lineTo(W - pad.r, sy(v)); g.stroke(); g.fillText(v.toFixed(1), pad.l - 6, sy(v) + 4); });
+    probs.forEach((v, i) => {
+      g.fillStyle = i === 3 ? css('--grad') : css('--dot');
+      g.fillRect(pad.l + i * bw + bw * .18, sy(v), bw * .64, sy(0) - sy(v));
+      g.fillStyle = i === 3 ? css('--ink') : css('--muted'); g.textAlign = 'center'; g.font = (i === 3 ? '600 ' : '') + '12px ' + css('--font-mono');
+      g.fillText(String(i), pad.l + i * bw + bw / 2, H - 8);
+    });
+  }
+
+  function renderAll() { updateCalc(); drawCE(); }
+  hidEl.addEventListener('input', updateCalc);
+  pcEl.addEventListener('input', drawCE);
+  addEventListener('resize', renderAll);
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', renderAll);
+  new MutationObserver(renderAll).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(renderAll);
+  renderAll();
+})();
+</script>
+
+</html>

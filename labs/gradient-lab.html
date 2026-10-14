@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>梯度下降实验台</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@600;800&family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: engineering notebook — one lab bench up top (data plot + controls), two "loss bowls" and a loss log below, then plain Q&A. */
+:root {
+  --paper: #F3F6F7;
+  --sheet: #FFFFFF;
+  --ink: #15222B;
+  --muted: #5B6B75;
+  --grid: #DCE4E8;
+  --line: #0E7C7B;      /* the model: y = wx + b */
+  --dot: #6E8796;       /* data points */
+  --grad: #C46A00;      /* gradient / ball */
+  --bad: #C2362F;
+  --font-display: "Noto Serif SC", "Songti SC", serif;
+  --font-body: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --paper: #0F171C; --sheet: #16222A; --ink: #E3EBEF; --muted: #93A5B0; --grid: #26353F;
+  --line: #3CC6C2; --dot: #7F9AAA; --grad: #F0A23B; --bad: #F06A60; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --paper: #0F171C; --sheet: #16222A; --ink: #E3EBEF; --muted: #93A5B0; --grid: #26353F;
+  --line: #3CC6C2; --dot: #7F9AAA; --grad: #F0A23B; --bad: #F06A60; color-scheme: dark; }
+
+body { background: var(--paper); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.7; }
+.wrap { max-width: 1080px; margin: 0 auto; padding-inline: 16px; padding-block: 28px 64px; display: grid; gap: 28px; }
+h1, h2 { font-family: var(--font-display); text-wrap: balance; margin: 0; line-height: 1.3; }
+h1 { font-size: clamp(26px, 4.4vw, 38px); font-weight: 800; }
+h2 { font-size: 22px; font-weight: 600; }
+.lede { max-width: 65ch; color: var(--muted); margin: 8px 0 0; }
+.eq { font-family: var(--font-mono); color: var(--line); font-weight: 600; }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+.bench { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 16px; }
+.panel { background: var(--sheet); border: 1px solid var(--grid); border-radius: 6px; padding: 14px; min-width: 0; }
+.label { font-size: 12px; letter-spacing: .06em; color: var(--muted); text-transform: uppercase; margin: 0 0 6px; }
+canvas { width: 100%; display: block; }
+#cData { aspect-ratio: 16 / 10; }
+.bowls { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.bowls canvas { aspect-ratio: 4 / 3; }
+.cap { font-size: 13px; color: var(--muted); margin: 8px 0 0; }
+
+.readout { display: grid; grid-template-columns: auto 1fr; gap: 2px 14px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 15px; margin-bottom: 14px; }
+.readout dt { color: var(--muted); }
+.readout dd { margin: 0; text-align: right; }
+.readout .big { font-size: 22px; font-weight: 600; }
+.readout .sep { border-top: 1px dashed var(--grid); padding-top: 4px; margin-top: 4px; }
+#rY { color: var(--dot); font-weight: 600; } #rP { color: var(--line); font-weight: 600; } #rE { color: var(--grad); font-weight: 600; }
+#cData { cursor: pointer; }
+.status { font-size: 14px; padding: 8px 10px; border-radius: 4px; background: var(--paper); margin-bottom: 14px; min-height: 3.2em; }
+.status.bad { color: var(--bad); }
+.ctrl { display: grid; gap: 10px; }
+.lr-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.lr-val { font-family: var(--font-mono); font-size: 20px; color: var(--grad); font-weight: 600; }
+input[type=range] { width: 100%; accent-color: var(--grad); }
+.presets, .btns { display: flex; flex-wrap: wrap; gap: 8px; }
+button { font: inherit; font-size: 14px; border: 1px solid var(--grid); background: var(--paper); color: var(--ink); padding: 6px 12px; border-radius: 4px; cursor: pointer; }
+button:hover { border-color: var(--muted); }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--line); outline-offset: 2px; }
+button.primary { background: var(--line); color: var(--sheet); border-color: var(--line); font-weight: 500; }
+button.on { border-color: var(--grad); color: var(--grad); }
+.loop { font-size: 13px; color: var(--muted); border-top: 1px dashed var(--grid); padding-top: 10px; margin-top: 4px; }
+.loop ol { margin: 4px 0 0; padding-left: 20px; }
+.loop li.hot { color: var(--ink); font-weight: 500; }
+
+.qa { display: grid; gap: 0; max-width: 780px; }
+.qa details { border-top: 1px solid var(--grid); padding-block: 12px; }
+.qa details:last-child { border-bottom: 1px solid var(--grid); }
+.qa summary { cursor: pointer; font-weight: 700; list-style: none; display: flex; gap: 10px; }
+.qa summary::before { content: "+"; font-family: var(--font-mono); color: var(--grad); width: 1ch; }
+.qa details[open] summary::before { content: "−"; }
+.qa p { margin: 8px 0 0 calc(1ch + 10px); max-width: 65ch; }
+code { font-family: var(--font-mono); font-size: .92em; background: var(--paper); padding: 0 4px; border-radius: 3px; }
+.qa code { background: var(--sheet); }
+
+.tablebox { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; min-width: 560px; font-size: 14px; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+th { font-size: 12px; letter-spacing: .06em; color: var(--muted); font-weight: 500; }
+td:first-child { font-weight: 700; white-space: nowrap; }
+
+.check ol { margin: 0; padding-left: 22px; max-width: 65ch; display: grid; gap: 8px; }
+section > h2 + * { margin-top: 12px; }
+
+@media (max-width: 760px) {
+  .bench { grid-template-columns: minmax(0, 1fr); }
+  .bowls { grid-template-columns: minmax(0, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>梯度下降实验台</h1>
+    <p class="lede">你跑的脚本只做了一件事：给出 100 个散点，让程序自己找出一条最贴近它们的直线 <span class="eq">y = w·x + b</span>。下面是同一个实验的可视化版本。先按「走一步」，看直线怎么被一点点拉正；再把学习率调到 1.5，看它怎么失控。</p>
+  </header>
+
+  <section class="bench" aria-label="实验台">
+    <div class="panel">
+      <p class="label">数据与当前模型</p>
+      <canvas id="cData" aria-label="散点和当前拟合直线"></canvas>
+      <p class="cap">灰点是 100 个已知答案：每个点的 x 和 y 都是事先给定的（按 y = 3x + 2 再加一点噪声生成），模型看得到这些 y，但不知道 3 和 2。青色线是模型此刻的猜测，橙色竖线是「预测值 − 已知的 y」，也就是每个点的偏差。loss 就是这些偏差平方后的平均值，训练就是把这些竖线整体压短。圈出来的是右侧追踪的样本点，点图上任意灰点可以换一个追踪。</p>
+    </div>
+    <div class="panel">
+      <p class="label">参数与控制</p>
+      <dl class="readout">
+        <dt>步数</dt><dd id="rStep">0</dd>
+        <dt>w（斜率）</dt><dd id="rW" class="big">0</dd>
+        <dt>b（截距）</dt><dd id="rB" class="big">0</dd>
+        <dt class="sep">样本点 x</dt><dd id="rX" class="sep">0</dd>
+        <dt>实际 y（已知答案）</dt><dd id="rY">0</dd>
+        <dt>预测 y = w·x + b</dt><dd id="rP">0</dd>
+        <dt>偏差 = 预测 − 实际</dt><dd id="rE">0</dd>
+        <dt class="sep">loss（100 个偏差平方的平均）</dt><dd id="rL" class="sep">0</dd>
+        <dt>梯度 dL/dw</dt><dd id="rGW">0</dd>
+        <dt>梯度 dL/db</dt><dd id="rGB">0</dd>
+      </dl>
+      <div class="status" id="status" aria-live="polite"></div>
+      <div class="ctrl">
+        <div class="lr-row"><label for="lr">学习率 lr（每步迈多大）</label><span class="lr-val mono" id="lrVal">0.1</span></div>
+        <input type="range" id="lr" min="0" max="100" step="1" value="57">
+        <div class="presets" role="group" aria-label="学习率预设">
+          <button data-lr="0.001">0.001</button>
+          <button data-lr="0.1">0.1</button>
+          <button data-lr="0.9">0.9</button>
+          <button data-lr="1.5">1.5</button>
+        </div>
+        <div class="btns">
+          <button class="primary" id="bStep">走一步</button>
+          <button id="bRun">连走 200 步</button>
+          <button id="bReset">重来（w=b=0）</button>
+        </div>
+        <div class="loop">
+          每一步就是这 4 件事：
+          <ol id="loopList">
+            <li>前向：用当前 w、b 算预测值</li>
+            <li>算 loss：预测和真实差多少</li>
+            <li>算梯度：w、b 各往哪边动能让 loss 变小</li>
+            <li>更新：w −= lr × 梯度，b 同理</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="bowls" aria-label="loss 碗与 loss 曲线">
+    <div class="panel">
+      <p class="label">loss 随 w 变化（b 固定为当前值）</p>
+      <canvas id="cBowlW"></canvas>
+      <p class="cap">橙球是当前 w。梯度就是球所在处的坡度，更新就是往下坡方向跳 lr × 坡度那么远。</p>
+    </div>
+    <div class="panel">
+      <p class="label">loss 随 b 变化（w 固定为当前值）</p>
+      <canvas id="cBowlB"></canvas>
+      <p class="cap">b 这只碗更陡。lr 超过 1 时，球每跳一次都越过谷底、落到更高的对面，这就是发散。</p>
+    </div>
+    <div class="panel">
+      <p class="label">loss 曲线（对数刻度）</p>
+      <canvas id="cLoss"></canvas>
+      <p class="cap">你脚本画出的就是这张图。最后降不到 0，停在约 0.01，因为数据本身带噪声。</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>你的 8 个问题</h2>
+    <div class="qa">
+      <details open><summary>整个脚本是不是在找 y = 3x + 2 的最佳拟合直线？</summary>
+        <p>是的，你理解得完全正确。这里「模型」就是 y = w·x + b 这个式子，「参数」是 w 和 b 两个数，「训练」就是让程序自动把 w、b 调到最好。程序事先不知道答案是 3 和 2，它只看得到那 100 个点。</p></details>
+      <details><summary>argparse 是什么，为什么要引用？</summary>
+        <p>Python 自带的一个小工具，作用是让你在运行时用 <code>--lr 0.1</code> 这种写法改参数，不用每次去改代码。它和机器学习没有关系，属于工程外壳，看到可以直接跳过。</p></details>
+      <details><summary>学习率是什么？</summary>
+        <p>每一步沿下坡方向迈多大一步。梯度只告诉你「往哪边走、坡有多陡」，学习率决定「真的走多远」。太小（0.001）走 200 步还没到谷底；太大（1.5）每步都跨过谷底，越跳越高。在上面实验台把 lr 换成 1.5 再按「连走 200 步」，看 b 那只碗就明白了。</p></details>
+      <details><summary>训练步数是什么？</summary>
+        <p>上面那 4 件事（预测、算 loss、算梯度、更新）重复的次数。200 步就是循环 200 次。大模型训练也是这个循环，只是要跑几十万步，每步喂几百万个 token。</p></details>
+      <details><summary>随机生成的数据是 64 位浮点数吗？</summary>
+        <p>是的，float64，每个数占 8 字节。这里用它只是为了让两种求梯度方法能精确对比。大模型训练通常用 bf16（2 字节），推理还会压到 int8 甚至 4 位。位数越少，越省显存、越快，但越不精确。这就是以后要学的「量化」，也是推理 Infra 最重要的旋钮之一。</p></details>
+      <details><summary>noise 噪声是什么？</summary>
+        <p>给每个点加的一点小随机偏移，模拟真实世界的测量误差。真实数据从来不会完美落在一条线上。所以训练完 w、b 接近但不正好等于 3 和 2，loss 也停在约 0.01（噪声大小 0.1 的平方），降不到 0。</p></details>
+      <details><summary>手工算梯度和自动算梯度有什么区别？</summary>
+        <p>先说梯度是什么：w 稍微变大一点，loss 会变大还是变小、变多少。它是一个方向加一个陡度。手工算，是你用微积分把这个变化率的公式推出来写进代码（脚本里 <code>grad_w = mean(2·err·x)</code> 那一行）。自动算，是 PyTorch 在前向计算时记下每一步运算，<code>loss.backward()</code> 时按链式法则倒推回去，自动得到同样的数。两者结果一模一样。</p></details>
+      <details><summary>为什么要拿手工的去对比自动的？</summary>
+        <p>为了让你确认 <code>loss.backward()</code> 没有魔法，它算的就是你能手推的那个东西。只有 2 个参数时还能手推；一个 80 亿参数、几十层的模型不可能手推，全靠自动求导。以后在任何训练代码里看到 <code>backward()</code>，你就知道它在做第 3 件事。</p></details>
+    </div>
+  </section>
+
+  <section>
+    <h2>这个小实验和大模型是什么关系</h2>
+    <div class="tablebox"><table>
+      <thead><tr><th>概念</th><th>这个脚本</th><th>一个 8B 大模型</th><th>对推理 Infra 意味着什么</th></tr></thead>
+      <tbody>
+        <tr><td>参数</td><td>w、b 两个数</td><td>约 80 亿个数</td><td>bf16 下光权重就占约 16GB，这就是你的 8GB 显卡放不下它的原因</td></tr>
+        <tr><td>前向</td><td>w·x + b</td><td>几十层矩阵乘法</td><td>推理只做前向。这里的乘法就是以后说的 GEMM 算子</td></tr>
+        <tr><td>loss</td><td>均方误差</td><td>交叉熵（猜下一个字猜得多准）</td><td>只在训练时需要，推理不算</td></tr>
+        <tr><td>梯度与更新</td><td>手推或 backward()</td><td>backward() + 优化器</td><td>推理不需要。所以推理比训练省得多，不用存梯度和优化器状态</td></tr>
+        <tr><td>数据精度</td><td>float64</td><td>训练 bf16，推理 bf16/int8/int4</td><td>量化：拿一点精度换显存和速度</td></tr>
+      </tbody>
+    </table></div>
+    <p class="cap">一句话总结：训练是反复做那 4 件事来调参数，推理只做第 1 件事。推理 Infra 研究的，就是怎样把第 1 件事做得又快又省。</p>
+  </section>
+
+  <section class="check">
+    <h2>第 1 步过关题</h2>
+    <ol>
+      <li>不看代码，用一句话说出训练循环每一步做的 4 件事。</li>
+      <li>lr = 1.5 时为什么会发散？在实验台里看 b 那只碗，用「坡度」和「跳过谷底」来解释。</li>
+      <li>如果这个模型训练好了要拿去「推理」（给一个新的 x 算 y），脚本里哪些部分还需要，哪些不需要？</li>
+    </ol>
+    <p class="cap">把答案发到线程里。三题能讲清楚，就进第 2 步：两层神经网络。</p>
+  </section>
+</div>
+
+<script>
+(function () {
+  // ---- data: same recipe as the script (y = 3x + 2 + noise). Seeded, so numbers differ slightly from PyTorch's. ----
+  function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+  const rnd = mulberry32(7);
+  function gauss() { let u = 0, v = 0; while (u === 0) u = rnd(); while (v === 0) v = rnd(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
+  const N = 100, X = [], Y = [];
+  for (let i = 0; i < N; i++) { const x = rnd() * 2 - 1; X.push(x); Y.push(3 * x + 2 + gauss() * 0.1); }
+
+  const lossAt = (w, b) => { let s = 0; for (let i = 0; i < N; i++) { const e = w * X[i] + b - Y[i]; s += e * e; } return s / N; };
+  const gradAt = (w, b) => { let gw = 0, gb = 0; for (let i = 0; i < N; i++) { const e = w * X[i] + b - Y[i]; gw += 2 * e * X[i]; gb += 2 * e; } return [gw / N, gb / N]; };
+
+  let sel = 0; X.forEach((x, i) => { if (Math.abs(x - 0.8) < Math.abs(X[sel] - 0.8)) sel = i; });
+  let w = 0, b = 0, step = 0, losses = [lossAt(0, 0)], trailW = [0], trailB = [0], hot = -1, running = null;
+
+  // ---- learning-rate slider: log scale from 0.001 to 2 ----
+  const lrEl = document.getElementById('lr'), lrVal = document.getElementById('lrVal');
+  const sliderToLr = v => +(Math.pow(10, -3 + (v / 100) * Math.log10(2000))).toPrecision(2);
+  const lrToSlider = lr => Math.round((Math.log10(lr) + 3) / Math.log10(2000) * 100);
+  let lr = 0.1; lrEl.value = lrToSlider(lr);
+  function setLr(v) { lr = v; lrVal.textContent = String(v); document.querySelectorAll('[data-lr]').forEach(btn => btn.classList.toggle('on', +btn.dataset.lr === v)); render(); }
+  lrEl.addEventListener('input', () => setLr(sliderToLr(+lrEl.value)));
+  document.querySelectorAll('[data-lr]').forEach(btn => btn.addEventListener('click', () => { const v = +btn.dataset.lr; lrEl.value = lrToSlider(v); setLr(v); }));
+
+  function doStep() {
+    const [gw, gb] = gradAt(w, b);
+    w -= lr * gw; b -= lr * gb; step++;
+    losses.push(lossAt(w, b)); trailW.push(w); trailB.push(b);
+    if (trailW.length > 30) { trailW.shift(); trailB.shift(); }
+  }
+  function reset() { stop(); w = 0; b = 0; step = 0; losses = [lossAt(0, 0)]; trailW = [0]; trailB = [0]; hot = -1; render(); }
+  function stop() { if (running) { cancelAnimationFrame(running); running = null; } document.getElementById('bRun').textContent = '连走 200 步'; }
+  const diverged = () => !isFinite(losses[losses.length - 1]) || losses[losses.length - 1] > 1e6;
+
+  document.getElementById('bStep').addEventListener('click', () => {
+    stop(); if (diverged()) return;
+    // walk the 4-part loop highlight once per click
+    doStep(); hot = 3; render();
+  });
+  document.getElementById('bReset').addEventListener('click', reset);
+  document.getElementById('bRun').addEventListener('click', () => {
+    if (running) { stop(); return; }
+    const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const target = step + 200;
+    if (reduce) { while (step < target && !diverged()) doStep(); render(); return; }
+    document.getElementById('bRun').textContent = '暂停';
+    let frame = 0;
+    const tick = () => {
+      frame++;
+      if (frame % 2 === 0) { doStep(); hot = (hot + 1) % 4; render(); }
+      if (step < target && !diverged()) running = requestAnimationFrame(tick); else { stop(); hot = -1; render(); }
+    };
+    running = requestAnimationFrame(tick);
+  });
+
+  // ---- drawing ----
+  let lastData = null;
+  const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  function prep(id) {
+    const c = document.getElementById(id), r = c.getBoundingClientRect(), d = window.devicePixelRatio || 1;
+    c.width = Math.max(1, Math.round(r.width * d)); c.height = Math.max(1, Math.round(r.height * d));
+    const g = c.getContext('2d'); g.setTransform(d, 0, 0, d, 0, 0); return { g, W: r.width, H: r.height };
+  }
+  const fmt = v => !isFinite(v) ? '∞' : Math.abs(v) >= 1e5 ? v.toExponential(2) : Math.abs(v) < 1e-3 && v !== 0 ? v.toExponential(2) : v.toFixed(4);
+  function axes(g, W, H, pad, xr, yr, xt, yt) {
+    const sx = x => pad.l + (x - xr[0]) / (xr[1] - xr[0]) * (W - pad.l - pad.r);
+    const sy = y => H - pad.b - (y - yr[0]) / (yr[1] - yr[0]) * (H - pad.t - pad.b);
+    g.strokeStyle = css('--grid'); g.lineWidth = 1; g.fillStyle = css('--muted'); g.font = '11px ' + css('--font-mono');
+    xt.forEach(t => { g.beginPath(); g.moveTo(sx(t), pad.t); g.lineTo(sx(t), H - pad.b); g.stroke(); g.textAlign = 'center'; g.fillText(t.label ?? t, sx(t), H - pad.b + 14); });
+    yt.forEach(t => { g.beginPath(); g.moveTo(pad.l, sy(t.v ?? t)); g.lineTo(W - pad.r, sy(t.v ?? t)); g.stroke(); g.textAlign = 'right'; g.fillText(t.label ?? t, pad.l - 6, sy(t.v ?? t) + 4); });
+    return { sx, sy };
+  }
+
+  function drawData() {
+    const { g, W, H } = prep('cData'); g.clearRect(0, 0, W, H);
+    const pad = { l: 34, r: 10, t: 10, b: 22 }, xr = [-1.1, 1.1], yr = [-2, 6];
+    const { sx, sy } = axes(g, W, H, pad, xr, yr, [-1, -0.5, 0, 0.5, 1], [-2, 0, 2, 4, 6]);
+    g.save(); g.beginPath(); g.rect(pad.l, pad.t, W - pad.l - pad.r, H - pad.t - pad.b); g.clip();
+    // residuals
+    g.strokeStyle = css('--grad'); g.globalAlpha = .45; g.lineWidth = 1;
+    for (let i = 0; i < N; i++) { g.beginPath(); g.moveTo(sx(X[i]), sy(Y[i])); g.lineTo(sx(X[i]), sy(w * X[i] + b)); g.stroke(); }
+    g.globalAlpha = 1;
+    // points
+    g.fillStyle = css('--dot');
+    for (let i = 0; i < N; i++) { g.beginPath(); g.arc(sx(X[i]), sy(Y[i]), 2.6, 0, 7); g.fill(); }
+    // true line (dashed) and model line
+    g.setLineDash([4, 4]); g.strokeStyle = css('--muted'); g.lineWidth = 1;
+    g.beginPath(); g.moveTo(sx(-1.1), sy(3 * -1.1 + 2)); g.lineTo(sx(1.1), sy(3 * 1.1 + 2)); g.stroke(); g.setLineDash([]);
+    if (isFinite(w) && isFinite(b)) { g.strokeStyle = css('--line'); g.lineWidth = 3; g.beginPath(); g.moveTo(sx(-1.1), sy(w * -1.1 + b)); g.lineTo(sx(1.1), sy(w * 1.1 + b)); g.stroke(); }
+    // tracked sample: actual y (ring), predicted y (filled), error (thick)
+    const px = sx(X[sel]), pyA = sy(Y[sel]), pyP = sy(w * X[sel] + b);
+    if (isFinite(pyP)) { g.strokeStyle = css('--grad'); g.lineWidth = 3; g.beginPath(); g.moveTo(px, pyA); g.lineTo(px, pyP); g.stroke();
+      g.fillStyle = css('--line'); g.beginPath(); g.arc(px, pyP, 5, 0, 7); g.fill(); }
+    g.strokeStyle = css('--ink'); g.lineWidth = 2; g.beginPath(); g.arc(px, pyA, 7, 0, 7); g.stroke();
+    g.restore();
+    lastData = { sx, sy };
+    g.fillStyle = css('--muted'); g.font = '12px ' + css('--font-body'); g.textAlign = 'left';
+    g.fillText('灰点：已知答案 y　橙线：偏差　虚线：真实规律（模型看不到）', pad.l + 8, pad.t + 14);
+  }
+
+  function drawBowl(id, which) {
+    const { g, W, H } = prep(id); g.clearRect(0, 0, W, H);
+    const pad = { l: 40, r: 10, t: 10, b: 22 };
+    const xr = which === 'w' ? [-1, 7] : [-2, 6];
+    const f = which === 'w' ? (v => lossAt(v, isFinite(b) ? b : 0)) : (v => lossAt(isFinite(w) ? w : 0, v));
+    let ymax = 0; for (let i = 0; i <= 60; i++) ymax = Math.max(ymax, f(xr[0] + (xr[1] - xr[0]) * i / 60));
+    ymax = Math.min(Math.max(ymax, 1), 1e6);
+    const nice = ymax > 20 ? Math.ceil(ymax / 10) * 10 : Math.ceil(ymax);
+    const ticksX = which === 'w' ? [0, 3, 6] : [-2, 0, 2, 4, 6];
+    const { sx, sy } = axes(g, W, H, pad, xr, [0, nice], ticksX.map(t => ({ valueOf: () => t, label: (which === 'w' ? 'w=' : 'b=') + t })), [0, nice / 2, nice].map(v => ({ v, label: +v.toPrecision(3) })));
+    g.save(); g.beginPath(); g.rect(pad.l, pad.t, W - pad.l - pad.r, H - pad.t - pad.b); g.clip();
+    g.strokeStyle = css('--ink'); g.lineWidth = 1.5; g.beginPath();
+    for (let i = 0; i <= 120; i++) { const v = xr[0] + (xr[1] - xr[0]) * i / 120, y = f(v); i ? g.lineTo(sx(v), sy(y)) : g.moveTo(sx(v), sy(y)); }
+    g.stroke();
+    // trail of jumps
+    const tr = which === 'w' ? trailW : trailB;
+    g.strokeStyle = css('--grad'); g.globalAlpha = .55; g.lineWidth = 1; g.beginPath();
+    tr.forEach((v, i) => { if (!isFinite(v)) return; const p = [sx(v), sy(f(v))]; i ? g.lineTo(...p) : g.moveTo(...p); }); g.stroke(); g.globalAlpha = 1;
+    const cur = which === 'w' ? w : b;
+    g.restore();
+    if (isFinite(cur) && cur >= xr[0] && cur <= xr[1] && f(cur) <= nice) {
+      g.fillStyle = css('--grad'); g.beginPath(); g.arc(sx(cur), sy(f(cur)), 6, 0, 7); g.fill();
+    } else {
+      g.fillStyle = css('--bad'); g.font = '12px ' + css('--font-body'); g.textAlign = 'center';
+      g.fillText('球已冲出画面：' + (which) + ' = ' + fmt(cur), (pad.l + W - pad.r) / 2, pad.t + 16);
+    }
+  }
+
+  function drawLoss() {
+    const { g, W, H } = prep('cLoss'); g.clearRect(0, 0, W, H);
+    const pad = { l: 46, r: 10, t: 10, b: 22 };
+    const n = Math.max(200, losses.length - 1);
+    const lo = -3, hi = 6;
+    const yt = [-3, 0, 3, 6].map(e => ({ v: e, label: '1e' + e }));
+    const { sx, sy } = axes(g, W, H, pad, [0, n], [lo, hi], [0, Math.round(n / 2), n], yt);
+    g.strokeStyle = css('--line'); g.lineWidth = 2; g.beginPath();
+    let started = false;
+    losses.forEach((L, i) => { const y = Math.max(lo, Math.min(hi, isFinite(L) ? Math.log10(Math.max(L, 1e-9)) : hi)); const p = [sx(i), sy(y)]; started ? g.lineTo(...p) : (g.moveTo(...p), started = true); });
+    g.stroke();
+  }
+
+  function render() {
+    const [gw, gb] = gradAt(w, b);
+    const L = losses[losses.length - 1];
+    document.getElementById('rStep').textContent = step;
+    document.getElementById('rW').textContent = fmt(w);
+    document.getElementById('rB').textContent = fmt(b);
+    document.getElementById('rL').textContent = fmt(L);
+    const pred = w * X[sel] + b;
+    document.getElementById('rX').textContent = X[sel].toFixed(4);
+    document.getElementById('rY').textContent = Y[sel].toFixed(4);
+    document.getElementById('rP').textContent = fmt(pred);
+    document.getElementById('rE').textContent = fmt(pred - Y[sel]);
+    document.getElementById('rGW').textContent = fmt(gw);
+    document.getElementById('rGB').textContent = fmt(gb);
+    const st = document.getElementById('status');
+    st.classList.toggle('bad', diverged() || (step > 3 && L > losses[0]));
+    if (diverged() || (step > 3 && L > losses[0])) st.textContent = '发散了：loss 越走越大。b 那只碗里，球每次都跳过谷底落到更高处。把 lr 调到 1 以下再试。';
+    else if (step === 0) st.textContent = '模型刚开始什么都不知道：w = 0、b = 0，预测全是 0。按「走一步」。';
+    else if (L < 0.0115) st.textContent = '基本到底了。w ≈ 3、b ≈ 2，剩下的 loss 来自数据里的噪声，再训练也去不掉。';
+    else if (lr < 0.01 && step >= 150) st.textContent = '走得太慢：lr 太小，200 步还远没到谷底。';
+    else st.textContent = '正在下坡：每一步 w、b 都往让 loss 变小的方向挪一点。';
+    document.querySelectorAll('#loopList li').forEach((li, i) => li.classList.toggle('hot', i === hot));
+    drawData(); drawBowl('cBowlW', 'w'); drawBowl('cBowlB', 'b'); drawLoss();
+  }
+
+  document.getElementById('cData').addEventListener('click', e => {
+    if (!lastData) return;
+    const r = e.currentTarget.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
+    let best = sel, bd = Infinity;
+    for (let i = 0; i < N; i++) { const d = (lastData.sx(X[i]) - mx) ** 2 + (lastData.sy(Y[i]) - my) ** 2; if (d < bd) { bd = d; best = i; } }
+    sel = best; render();
+  });
+  setLr(0.1);
+  addEventListener('resize', render);
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', render);
+  new MutationObserver(render).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(render);
+})();
+</script>
+
+</html>

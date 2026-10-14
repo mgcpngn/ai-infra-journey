@@ -1,0 +1,699 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>body{margin:0}[hidden]{display:none!important}</style>
+<title>神经网络实验台</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@600;800&family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: same engineering-notebook bench as the gradient lab. Top: map of the data + controls. Middle: the network wiring + one sample traced through it. Bottom: what each hidden neuron sees, loss curve, experiments. */
+:root {
+  --paper: #F3F6F7;
+  --sheet: #FFFFFF;
+  --ink: #15222B;
+  --muted: #5B6B75;
+  --grid: #DCE4E8;
+  --c0: #0E7C7B;   /* class A */
+  --c1: #C46A00;   /* class B */
+  --c2: #6A4CC0;   /* class C */
+  --pos: #2563A8;  /* positive weight / gradient */
+  --neg: #C2362F;  /* negative weight / gradient */
+  --hl: #15222B;
+  --font-display: "Noto Serif SC", "Songti SC", serif;
+  --font-body: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --paper: #0F171C; --sheet: #16222A; --ink: #E3EBEF; --muted: #93A5B0; --grid: #26353F;
+  --c0: #3CC6C2; --c1: #F0A23B; --c2: #A68BFA; --pos: #6AA8F0; --neg: #F06A60; --hl: #FFFFFF; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --paper: #0F171C; --sheet: #16222A; --ink: #E3EBEF; --muted: #93A5B0; --grid: #26353F;
+  --c0: #3CC6C2; --c1: #F0A23B; --c2: #A68BFA; --pos: #6AA8F0; --neg: #F06A60; --hl: #FFFFFF; color-scheme: dark; }
+
+body { background: var(--paper); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.7; }
+.wrap { max-width: 1120px; margin: 0 auto; padding-inline: 16px; padding-block: 28px 64px; display: grid; gap: 22px; }
+h1, h2 { font-family: var(--font-display); text-wrap: balance; margin: 0; line-height: 1.3; }
+h1 { font-size: clamp(26px, 4.4vw, 38px); font-weight: 800; }
+h2 { font-size: 21px; font-weight: 600; }
+.lede { max-width: 68ch; color: var(--muted); margin: 8px 0 0; }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.panel { background: var(--sheet); border: 1px solid var(--grid); border-radius: 6px; padding: 14px; min-width: 0; }
+.label { font-size: 12px; letter-spacing: .06em; color: var(--muted); margin: 0 0 8px; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; align-items: baseline; }
+.cap { font-size: 13px; color: var(--muted); margin: 8px 0 0; }
+canvas { width: 100%; display: block; }
+
+.row { display: grid; gap: 16px; }
+.row.top { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); }
+.row.mid { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); }
+.row.low { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+@media (max-width: 860px) { .row.top, .row.mid, .row.low { grid-template-columns: minmax(0, 1fr); } }
+
+#cMap { aspect-ratio: 1 / 1; cursor: crosshair; max-width: 100%; }
+#cNet { height: 380px; }
+#cLoss { height: 220px; }
+
+.ctrl { display: grid; gap: 12px; }
+.field { display: grid; gap: 4px; }
+.field > .lab { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 14px; }
+.field .val { font-family: var(--font-mono); font-weight: 600; font-variant-numeric: tabular-nums; }
+.seg { display: flex; flex-wrap: wrap; gap: 6px; }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--sheet); border-color: var(--ink); }
+input[type=range] { width: 100%; accent-color: var(--c1); }
+button { font: inherit; font-size: 14px; border: 1px solid var(--grid); background: var(--paper); color: var(--ink); padding: 5px 11px; border-radius: 4px; cursor: pointer; }
+button:hover { border-color: var(--muted); }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--c1); outline-offset: 2px; }
+.btns { display: flex; flex-wrap: wrap; gap: 8px; }
+.btns .primary { background: var(--ink); color: var(--sheet); border-color: var(--ink); font-weight: 600; }
+.btns .step { border-color: var(--c1); color: var(--c1); font-weight: 600; }
+
+.metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.metric { background: var(--paper); border-radius: 4px; padding: 6px 8px; }
+.metric .k { font-size: 12px; color: var(--muted); }
+.metric .v { font-family: var(--font-mono); font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.status { font-size: 14px; padding: 8px 10px; border-radius: 4px; background: var(--paper); border-left: 3px solid var(--muted); }
+.status.warn { border-left-color: var(--neg); }
+.status.good { border-left-color: var(--c0); }
+
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+.sw { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: -1px; margin-right: 4px; }
+.sw.ring { background: transparent !important; border: 2px solid var(--muted); width: 8px; height: 8px; }
+.ln { display: inline-block; width: 18px; height: 3px; vertical-align: 3px; margin-right: 4px; }
+
+.trace { display: grid; gap: 10px; font-size: 14px; }
+.stage { border: 1px solid var(--grid); border-radius: 4px; padding: 8px 10px; transition: border-color .2s, opacity .2s; }
+.stage.on { border-color: var(--c1); }
+.stage.off { opacity: .45; }
+.stage h3 { margin: 0 0 4px; font-size: 14px; font-weight: 700; display: flex; justify-content: space-between; gap: 8px; }
+.stage h3 .what { font-weight: 400; color: var(--muted); font-size: 13px; }
+.kv { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 10px; font-family: var(--font-mono); font-size: 13px; font-variant-numeric: tabular-nums; }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; overflow-x: auto; white-space: nowrap; }
+.note { font-size: 13px; color: var(--muted); margin: 4px 0 0; }
+
+.neurons { display: grid; grid-template-columns: repeat(auto-fill, minmax(58px, 1fr)); gap: 8px; }
+.neuron { display: grid; gap: 2px; font-size: 11px; color: var(--muted); text-align: center; font-family: var(--font-mono); }
+.neuron canvas { aspect-ratio: 1 / 1; border-radius: 3px; border: 1px solid var(--grid); image-rendering: pixelated; }
+.neuron.dead { color: var(--neg); }
+
+.exp { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+.exp .panel h3 { margin: 0 0 4px; font-size: 15px; }
+.exp .panel p { margin: 0 0 8px; font-size: 14px; }
+.exp .panel button { font-size: 13px; }
+table { border-collapse: collapse; font-size: 14px; width: 100%; }
+th, td { border-bottom: 1px solid var(--grid); padding: 6px 8px; text-align: left; vertical-align: top; }
+th { font-weight: 600; color: var(--muted); font-size: 13px; }
+.tbl { overflow-x: auto; }
+@media (prefers-reduced-motion: reduce) { .stage { transition: none; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>神经网络实验台</h1>
+    <p class="lede">一个能在网页里实时训练的小神经网络：2 个输入 → 一层隐藏神经元 → 3 个类别。它和你的 MNIST 网络是同一种结构，只是输入从 784 个像素换成了平面上一个点的坐标 (x₁, x₂)，输出从 10 个数字换成了 3 种颜色。好处是每个神经元、每根连线、每个梯度都能画出来给你看。</p>
+  </header>
+
+  <section class="row top">
+    <div class="panel">
+      <p class="label"><span>数据和模型的判断</span><span class="legend"><span><i class="sw" style="background:var(--muted)"></i>训练集</span><span><i class="sw ring"></i>测试集</span></span></p>
+      <canvas id="cMap" aria-label="数据点和模型划分的区域"></canvas>
+      <p class="cap">点是数据，颜色是正确答案；背景色是模型此刻的判断，颜色越深越有把握。<b>点一下任意一个点</b>，下面会把它从输入到输出、再到梯度，一步步拆开给你看。</p>
+    </div>
+    <div class="panel ctrl">
+      <div class="field">
+        <div class="lab"><span>数据集</span></div>
+        <div class="seg" id="segData">
+          <button type="button" data-v="blobs">三团</button>
+          <button type="button" data-v="rings">同心圆</button>
+          <button type="button" data-v="spiral">螺旋</button>
+        </div>
+      </div>
+      <div class="field">
+        <div class="lab"><label for="rH">隐藏神经元个数 hidden</label><span class="val" id="vH">8</span></div>
+        <input type="range" id="rH" min="1" max="32" step="1" value="8">
+      </div>
+      <div class="field">
+        <div class="lab"><label for="rLr">学习率 lr</label><span class="val" id="vLr">0.50</span></div>
+        <input type="range" id="rLr" min="-2" max="0.7" step="0.01" value="-0.301">
+      </div>
+      <div class="field">
+        <div class="lab"><span>激活函数</span><span class="lab"><span>初始化</span></span></div>
+        <div class="seg" style="justify-content:space-between">
+          <span class="seg" id="segAct"><button type="button" data-v="relu">ReLU</button><button type="button" data-v="none">不用</button></span>
+          <span class="seg" id="segInit"><button type="button" data-v="rand">小随机数</button><button type="button" data-v="zero">全零</button></span>
+        </div>
+      </div>
+      <div class="field">
+        <div class="lab"><span>训练集大小</span><span class="lab"><span>每帧训练步数</span></span></div>
+        <div class="seg" style="justify-content:space-between">
+          <span class="seg" id="segSize"><button type="button" data-v="100">每类 100 个</button><button type="button" data-v="10">每类 10 个</button></span>
+          <span class="seg" id="segSpeed"><button type="button" data-v="1">1</button><button type="button" data-v="10">10</button><button type="button" data-v="50">50</button></span>
+        </div>
+      </div>
+      <div class="btns">
+        <button type="button" class="step" id="bStep">单步：① 前向</button>
+        <button type="button" class="primary" id="bRun">连续训练</button>
+        <button type="button" id="bReset">重新初始化</button>
+      </div>
+      <div class="metrics">
+        <div class="metric"><div class="k">已训练步数</div><div class="v" id="mStep">0</div></div>
+        <div class="metric"><div class="k">训练集 loss</div><div class="v" id="mTrL">–</div></div>
+        <div class="metric"><div class="k">测试集 loss</div><div class="v" id="mTeL">–</div></div>
+        <div class="metric"><div class="k">参数总数</div><div class="v" id="mParams">–</div></div>
+        <div class="metric"><div class="k">训练集准确率</div><div class="v" id="mTrA">–</div></div>
+        <div class="metric"><div class="k">测试集准确率</div><div class="v" id="mTeA">–</div></div>
+      </div>
+      <div class="status" id="status" aria-live="polite"></div>
+    </div>
+  </section>
+
+  <section class="row mid">
+    <div class="panel">
+      <p class="label"><span id="netTitle">网络内部 · 连线显示权重</span>
+        <span class="seg" id="segEdge"><button type="button" data-v="w">看权重</button><button type="button" data-v="g">看梯度</button></span></p>
+      <canvas id="cNet" aria-label="网络结构图"></canvas>
+      <p class="cap" id="netCap">左边 2 个输入，中间是隐藏神经元，右边 3 个输出。<span style="color:var(--pos)">蓝线</span>是正数，<span style="color:var(--neg)">红线</span>是负数，越粗绝对值越大。圆圈里的深浅是选中的那个点流过时，每个神经元的输出大小。</p>
+    </div>
+    <div class="panel">
+      <p class="label"><span>把选中的那一个点拆开看</span><span id="selName" class="mono"></span></p>
+      <div class="trace">
+        <div class="stage" id="stF">
+          <h3><span>① 前向：算出预测</span><span class="what">推理只做这一步</span></h3>
+          <dl class="kv" id="kvF"></dl>
+        </div>
+        <div class="stage" id="stB">
+          <h3><span>② 反向：算梯度</span><span class="what">从输出往输入一层层算</span></h3>
+          <dl class="kv" id="kvB"></dl>
+          <p class="note">输出层的误差 = 概率 − 正确答案（正确的那类记 1，其他记 0）。负数表示"这一类的分数该往上调"。</p>
+        </div>
+        <div class="stage" id="stU">
+          <h3><span>③ 更新：所有参数一起改</span><span class="what">新值 = 旧值 − lr × 梯度</span></h3>
+          <dl class="kv" id="kvU"></dl>
+          <p class="note">注意：真正用来更新的梯度，是全部训练点各自梯度的平均，不只是这一个点的。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="row low">
+    <div class="panel">
+      <p class="label"><span>每个隐藏神经元"看到"的世界</span><span>28×28，和 MNIST 一样大</span></p>
+      <div class="neurons" id="neurons"></div>
+      <p class="cap">每个小方块是平面上每个位置流过这个神经元后的输出：越亮越大，黑色是 0。用 ReLU 时，每个神经元其实只会画一条直线，把平面切成"亮"和"0"两半；输出层再把这些半平面拼起来，就能拼出圆环、螺旋。标红的是"死神经元"：整个平面上都输出 0，它的梯度也永远是 0，再也学不动。</p>
+    </div>
+    <div class="panel">
+      <p class="label"><span>loss 曲线（对数刻度）</span><span class="legend"><span><i class="ln" style="background:var(--ink)"></i>训练集</span><span><i class="ln" style="background:var(--c1)"></i>测试集</span></span></p>
+      <canvas id="cLoss" aria-label="训练和测试 loss 曲线"></canvas>
+      <p class="cap">两条线一起往下走，说明模型学到了真规律。如果训练集一直往下、测试集却掉头往上，就是过拟合：在"背题"。</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>五个实验，每个一键设好</h2>
+    <p class="lede">点按钮会把参数调好并重新初始化，然后点"连续训练"观察。先自己猜结果，再看。</p>
+  </section>
+  <section class="exp">
+    <div class="panel"><h3>1. 去掉激活函数</h3><p>同心圆 + 不用激活函数。不管神经元有多少个，整个网络都等于一个线性函数，只能用直线切平面，圆环切不出来。准确率会卡在 30～40%。你在 MNIST 上去掉 ReLU 掉了几个点，是同一个原因，只是手写数字大部分用直线也能分开。</p><button type="button" data-exp="1">设置实验 1</button></div>
+    <div class="panel"><h3>2. 全零初始化</h3><p>所有权重从 0 开始。每个隐藏神经元一模一样，收到的梯度也一模一样，永远长不出差别；用 ReLU 时梯度干脆是 0。loss 会一直停在 1.099（= ln 3，三类各猜 1/3）。这就是初始值必须用小随机数的原因。</p><button type="button" data-exp="2">设置实验 2</button></div>
+    <div class="panel"><h3>3. 神经元太少</h3><p>螺旋 + hidden=2。两个神经元只能画两条线，拼不出螺旋，准确率停在 50% 左右。把 hidden 拉到 16 再训练，对比一下。这就是"模型容量"：参数太少，学不会复杂的规律。</p><button type="button" data-exp="3">设置实验 3</button></div>
+    <div class="panel"><h3>4. 过拟合</h3><p>螺旋 + 每类只有 10 个训练点 + hidden=32。训练集准确率很快到 100%，测试集只有 80% 左右，测试 loss 还会越训越高。就像你 MNIST 里训练集 99.38%、验证集 97.93% 那个差距，只是放大了。</p><button type="button" data-exp="4">设置实验 4</button></div>
+    <div class="panel"><h3>5. 学习率太大</h3><p>同心圆 + lr=5。每一步迈得太大，loss 会跳来跳去或卡住不动，不少神经元会被一步打"死"。对照梯度下降实验台里 lr 超过 1 就发散的现象。</p><button type="button" data-exp="5">设置实验 5</button></div>
+  </section>
+
+  <section class="panel">
+    <h2 style="margin-bottom:8px">和你的 MNIST 网络一一对应</h2>
+    <div class="tbl"><table>
+      <thead><tr><th></th><th>这个实验台</th><th>你的 MNIST 网络</th></tr></thead>
+      <tbody>
+        <tr><td>输入</td><td>2 个数（点的坐标）</td><td>784 个数（28×28 像素）</td></tr>
+        <tr><td>隐藏层</td><td>hidden 个神经元 + ReLU</td><td>128 个神经元 + ReLU</td></tr>
+        <tr><td>输出</td><td>3 个分数 → softmax → 3 个概率</td><td>10 个分数 → softmax → 10 个概率</td></tr>
+        <tr><td>参数量</td><td class="mono">2·h + h + h·3 + 3</td><td class="mono">784·h + h + h·10 + 10</td></tr>
+        <tr><td>loss</td><td colspan="2">交叉熵 = −ln(正确那一类的概率)，对所有训练样本取平均</td></tr>
+        <tr><td>每一步</td><td>全部训练点一起算（整批）</td><td>每次取 64 张图（mini-batch）</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+</div>
+
+<script>
+// CORE START
+function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function gaussFrom(rnd) { return function () { let u = 0, v = 0; while (u === 0) u = rnd(); while (v === 0) v = rnd(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }; }
+const C = 3;
+
+function makeData(name, perClass, seed) {
+  const rnd = mulberry32(seed), g = gaussFrom(rnd);
+  const X = [], Y = [];
+  for (let j = 0; j < C; j++) {
+    for (let i = 0; i < perClass; i++) {
+      let x, y;
+      if (name === 'blobs') {
+        const a = Math.PI / 2 + j * 2 * Math.PI / 3;
+        x = 0.55 * Math.cos(a) + g() * 0.17; y = 0.55 * Math.sin(a) + g() * 0.17;
+      } else if (name === 'rings') {
+        const r = 0.18 + 0.36 * j + g() * 0.05, a = rnd() * 2 * Math.PI;
+        x = r * Math.cos(a); y = r * Math.sin(a);
+      } else {
+        const t = rnd(), r = 0.08 + 0.9 * t, a = j * 2 * Math.PI / 3 + t * 3.6 + g() * 0.14;
+        x = r * Math.sin(a); y = r * Math.cos(a);
+      }
+      X.push([x, y]); Y.push(j);
+    }
+  }
+  return { X, Y };
+}
+
+function makeNet(H, init, seed) {
+  const rnd = mulberry32(seed);
+  const net = { H, W1: new Float64Array(H * 2), b1: new Float64Array(H), W2: new Float64Array(C * H), b2: new Float64Array(C) };
+  if (init === 'rand') {
+    const u = (bound) => (rnd() * 2 - 1) * bound;
+    const k1 = 1 / Math.sqrt(2), k2 = 1 / Math.sqrt(H);
+    for (let i = 0; i < H * 2; i++) net.W1[i] = u(k1);
+    for (let i = 0; i < H; i++) net.b1[i] = u(k1);
+    for (let i = 0; i < C * H; i++) net.W2[i] = u(k2);
+    for (let i = 0; i < C; i++) net.b2[i] = u(k2);
+  }
+  net.gW1 = new Float64Array(H * 2); net.gb1 = new Float64Array(H); net.gW2 = new Float64Array(C * H); net.gb2 = new Float64Array(C);
+  return net;
+}
+
+// forward one point; fills out = {a, h, z, p}
+function forward(net, x1, x2, relu, out) {
+  const H = net.H;
+  for (let i = 0; i < H; i++) {
+    const a = net.W1[i * 2] * x1 + net.W1[i * 2 + 1] * x2 + net.b1[i];
+    out.a[i] = a; out.h[i] = relu ? (a > 0 ? a : 0) : a;
+  }
+  let m = -Infinity;
+  for (let c = 0; c < C; c++) {
+    let z = net.b2[c];
+    for (let i = 0; i < H; i++) z += net.W2[c * H + i] * out.h[i];
+    out.z[c] = z; if (z > m) m = z;
+  }
+  let s = 0;
+  for (let c = 0; c < C; c++) { out.p[c] = Math.exp(out.z[c] - m); s += out.p[c]; }
+  for (let c = 0; c < C; c++) out.p[c] /= s;
+  return out;
+}
+function scratch(H) { return { a: new Float64Array(H), h: new Float64Array(H), z: new Float64Array(C), p: new Float64Array(C), dz: new Float64Array(C), da: new Float64Array(H) }; }
+
+// one point's backward pass into dz, da (no accumulation)
+function backwardPoint(net, y, relu, s) {
+  const H = net.H;
+  for (let c = 0; c < C; c++) s.dz[c] = s.p[c] - (c === y ? 1 : 0);
+  for (let i = 0; i < H; i++) {
+    let d = 0;
+    for (let c = 0; c < C; c++) d += net.W2[c * H + i] * s.dz[c];
+    s.da[i] = relu ? (s.a[i] > 0 ? d : 0) : d;
+  }
+}
+
+// average loss and accuracy on a set
+function evaluate(net, D, relu, s) {
+  let L = 0, ok = 0;
+  for (let n = 0; n < D.X.length; n++) {
+    forward(net, D.X[n][0], D.X[n][1], relu, s);
+    const y = D.Y[n];
+    L -= Math.log(Math.max(s.p[y], 1e-300));
+    let best = 0; for (let c = 1; c < C; c++) if (s.p[c] > s.p[best]) best = c;
+    if (best === y) ok++;
+  }
+  return { loss: L / D.X.length, acc: ok / D.X.length };
+}
+
+// full-batch gradients: fills net.g*, returns average loss
+function computeGrads(net, D, relu, s) {
+  const H = net.H, N = D.X.length;
+  net.gW1.fill(0); net.gb1.fill(0); net.gW2.fill(0); net.gb2.fill(0);
+  let L = 0;
+  for (let n = 0; n < N; n++) {
+    const x1 = D.X[n][0], x2 = D.X[n][1], y = D.Y[n];
+    forward(net, x1, x2, relu, s);
+    L -= Math.log(Math.max(s.p[y], 1e-300));
+    backwardPoint(net, y, relu, s);
+    for (let c = 0; c < C; c++) {
+      net.gb2[c] += s.dz[c];
+      for (let i = 0; i < H; i++) net.gW2[c * H + i] += s.dz[c] * s.h[i];
+    }
+    for (let i = 0; i < H; i++) {
+      net.gb1[i] += s.da[i]; net.gW1[i * 2] += s.da[i] * x1; net.gW1[i * 2 + 1] += s.da[i] * x2;
+    }
+  }
+  for (const g of [net.gW1, net.gb1, net.gW2, net.gb2]) for (let i = 0; i < g.length; i++) g[i] /= N;
+  return L / N;
+}
+
+function applyUpdate(net, lr) {
+  let sq = 0;
+  for (const [w, g] of [[net.W1, net.gW1], [net.b1, net.gb1], [net.W2, net.gW2], [net.b2, net.gb2]])
+    for (let i = 0; i < w.length; i++) { const d = lr * g[i]; w[i] -= d; sq += d * d; }
+  return Math.sqrt(sq);
+}
+// CORE END
+
+
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const S = { ds: 'rings', H: 8, lr: 0.5, relu: true, init: 'rand', per: 100, speed: 10, edge: 'w',
+              running: false, step: 0, phase: 0, seed: 5, sel: { set: 'tr', i: 0 }, hist: [], stride: 1, lastLoss: null, lastDelta: null };
+  let net, tr, te, sc, gridS;
+  let shown = { fw: true, bw: false, up: false };
+
+  // ---------- theme colors ----------
+  let col = {};
+  function readColors() {
+    const cs = getComputedStyle(document.documentElement);
+    for (const k of ['paper', 'sheet', 'ink', 'muted', 'grid', 'c0', 'c1', 'c2', 'pos', 'neg', 'hl']) col[k] = cs.getPropertyValue('--' + k).trim();
+    col.rgb = {}; for (const k in col) if (typeof col[k] === 'string' && col[k][0] === '#') col.rgb[k] = hex(col[k]);
+    col.cls = [col.c0, col.c1, col.c2]; col.clsRgb = [col.rgb.c0, col.rgb.c1, col.rgb.c2];
+  }
+  function hex(h) { h = h.replace('#', ''); if (h.length === 3) h = h.split('').map(c => c + c).join(''); const n = parseInt(h, 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; }
+  const mix = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+  const rgba = (c, a) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
+
+  // ---------- setup ----------
+  function rebuildData() {
+    tr = makeData(S.ds, S.per, 11);
+    te = makeData(S.ds, 50, 99);
+    if (S.sel.set === 'tr' && S.sel.i >= tr.X.length) S.sel.i = 0;
+  }
+  function reinit(newSeed) {
+    if (newSeed) S.seed++;
+    net = makeNet(S.H, S.init, S.seed); sc = scratch(S.H); gridS = scratch(S.H);
+    S.step = 0; S.phase = 0; S.hist = []; S.stride = 1; S.lastLoss = null; S.lastDelta = null;
+    shown = { fw: true, bw: false, up: false };
+    record(); buildNeuronCells(); refresh();
+  }
+  function record() {
+    const a = evaluate(net, tr, S.relu, sc), b = evaluate(net, te, S.relu, sc);
+    S.cur = { trL: a.loss, trA: a.acc, teL: b.loss, teA: b.acc };
+    if (S.step % S.stride === 0) {
+      S.hist.push([S.step, a.loss, b.loss]);
+      if (S.hist.length > 600) { S.hist = S.hist.filter((_, i) => i % 2 === 0); S.stride *= 2; }
+    }
+  }
+  function trainStep() {
+    computeGrads(net, tr, S.relu, sc);
+    S.lastDelta = applyUpdate(net, S.lr);
+    S.step++;
+  }
+
+  // ---------- controls ----------
+  function seg(id, key, cast, onChange) {
+    const el = $(id);
+    const sync = () => el.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(cast(b.dataset.v) === S[key])));
+    el.addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; S[key] = cast(b.dataset.v); sync(); onChange && onChange(); });
+    sync(); return sync;
+  }
+  const syncs = {
+    ds: seg('segData', 'ds', String, () => { rebuildData(); reinit(false); }),
+    act: (() => { const el = $('segAct'); const s = () => el.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String((b.dataset.v === 'relu') === S.relu)));
+      el.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; S.relu = b.dataset.v === 'relu'; s(); reinit(false); }); s(); return s; })(),
+    init: seg('segInit', 'init', String, () => reinit(false)),
+    per: seg('segSize', 'per', Number, () => { rebuildData(); reinit(false); }),
+    speed: seg('segSpeed', 'speed', Number),
+    edge: seg('segEdge', 'edge', String, () => drawNet()),
+  };
+  $('rH').addEventListener('input', () => { S.H = +$('rH').value; $('vH').textContent = S.H; reinit(false); });
+  $('rLr').addEventListener('input', () => { S.lr = Math.pow(10, +$('rLr').value); $('vLr').textContent = fmtLr(S.lr); });
+  function fmtLr(v) { return v >= 1 ? v.toFixed(1) : v >= 0.1 ? v.toFixed(2) : v.toFixed(3); }
+  function setLr(v) { S.lr = v; $('rLr').value = Math.log10(v); $('vLr').textContent = fmtLr(v); }
+  function setH(h) { S.H = h; $('rH').value = h; $('vH').textContent = h; }
+
+  $('bRun').addEventListener('click', () => { S.running = !S.running; S.phase = 0; shown = { fw: true, bw: true, up: true }; $('bRun').textContent = S.running ? '暂停' : '连续训练'; refresh(); if (S.running) loop(); });
+  $('bReset').addEventListener('click', () => reinit(true));
+  const phaseLabels = ['单步：① 前向', '单步：② 反向', '单步：③ 更新'];
+  $('bStep').addEventListener('click', () => {
+    if (S.running) { S.running = false; $('bRun').textContent = '连续训练'; }
+    if (S.phase === 0) { shown = { fw: true, bw: false, up: false }; S.edge = 'w'; S.phase = 1; }
+    else if (S.phase === 1) { S.lastLoss = computeGrads(net, tr, S.relu, sc); shown = { fw: true, bw: true, up: false }; S.edge = 'g'; S.phase = 2; }
+    else { S.lastDelta = applyUpdate(net, S.lr); S.step++; record(); shown = { fw: true, bw: true, up: true }; S.edge = 'w'; S.phase = 0; }
+    syncs.edge(); refresh();
+  });
+
+  document.querySelectorAll('[data-exp]').forEach(b => b.addEventListener('click', () => {
+    const n = +b.dataset.exp;
+    const presets = {
+      1: { ds: 'rings', H: 8, relu: false, init: 'rand', per: 100, lr: 0.5 },
+      2: { ds: 'rings', H: 8, relu: true, init: 'zero', per: 100, lr: 0.5 },
+      3: { ds: 'spiral', H: 2, relu: true, init: 'rand', per: 100, lr: 1 },
+      4: { ds: 'spiral', H: 32, relu: true, init: 'rand', per: 10, lr: 1 },
+      5: { ds: 'rings', H: 8, relu: true, init: 'rand', per: 100, lr: 5 },
+    }[n];
+    S.running = false; $('bRun').textContent = '连续训练';
+    Object.assign(S, { ds: presets.ds, relu: presets.relu, init: presets.init, per: presets.per });
+    setH(presets.H); setLr(presets.lr);
+    Object.values(syncs).forEach(f => f());
+    rebuildData(); reinit(false);
+    window.scrollTo({ top: 0, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  }));
+
+  // ---------- canvas helpers ----------
+  function fit(cv) {
+    const r = cv.getBoundingClientRect(), d = window.devicePixelRatio || 1;
+    const w = Math.max(1, Math.round(r.width * d)), h = Math.max(1, Math.round(r.height * d));
+    if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+    const ctx = cv.getContext('2d'); ctx.setTransform(d, 0, 0, d, 0, 0); return { ctx, w: r.width, h: r.height };
+  }
+  const R = 1.25; // map domain [-R, R]
+
+  // ---------- data map ----------
+  const G = 72; const off = document.createElement('canvas'); off.width = G; off.height = G;
+  const gridP = new Float32Array(G * G * 3);
+  const NG = 28; let gridH = null;
+  function computeGrid() {
+    gridH = new Float32Array(NG * NG * S.H);
+    for (let j = 0; j < G; j++) for (let i = 0; i < G; i++) {
+      const x1 = -R + (i + 0.5) / G * 2 * R, x2 = R - (j + 0.5) / G * 2 * R;
+      forward(net, x1, x2, S.relu, gridS);
+      const k = (j * G + i) * 3; gridP[k] = gridS.p[0]; gridP[k + 1] = gridS.p[1]; gridP[k + 2] = gridS.p[2];
+    }
+    for (let j = 0; j < NG; j++) for (let i = 0; i < NG; i++) {
+      const x1 = -R + (i + 0.5) / NG * 2 * R, x2 = R - (j + 0.5) / NG * 2 * R;
+      forward(net, x1, x2, S.relu, gridS);
+      for (let h = 0; h < S.H; h++) gridH[(j * NG + i) * S.H + h] = gridS.h[h];
+    }
+  }
+  function drawMap() {
+    const cv = $('cMap'); const { ctx, w, h } = fit(cv);
+    const octx = off.getContext('2d'); const img = octx.createImageData(G, G);
+    const base = col.rgb.sheet;
+    for (let p = 0; p < G * G; p++) {
+      let best = 0; for (let c = 1; c < 3; c++) if (gridP[p * 3 + c] > gridP[p * 3 + best]) best = c;
+      const conf = (gridP[p * 3 + best] - 1 / 3) / (2 / 3);
+      const m = mix(base, col.clsRgb[best], 0.08 + 0.42 * Math.max(0, conf));
+      img.data[p * 4] = m[0]; img.data[p * 4 + 1] = m[1]; img.data[p * 4 + 2] = m[2]; img.data[p * 4 + 3] = 255;
+    }
+    octx.putImageData(img, 0, 0);
+    ctx.imageSmoothingEnabled = true; ctx.drawImage(off, 0, 0, w, h);
+    const px = (x) => (x + R) / (2 * R) * w, py = (y) => (R - y) / (2 * R) * h;
+    // axes
+    ctx.strokeStyle = rgba(col.rgb.muted, 0.25); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(px(0), 0); ctx.lineTo(px(0), h); ctx.moveTo(0, py(0)); ctx.lineTo(w, py(0)); ctx.stroke();
+    const rad = Math.max(3, Math.min(5, w / 110));
+    for (const [D, isTr] of [[te, false], [tr, true]]) {
+      for (let n = 0; n < D.X.length; n++) {
+        ctx.beginPath(); ctx.arc(px(D.X[n][0]), py(D.X[n][1]), rad, 0, Math.PI * 2);
+        if (isTr) { ctx.fillStyle = col.cls[D.Y[n]]; ctx.fill(); ctx.strokeStyle = col.sheet; ctx.lineWidth = 1; ctx.stroke(); }
+        else { ctx.strokeStyle = col.cls[D.Y[n]]; ctx.lineWidth = 1.6; ctx.stroke(); }
+      }
+    }
+    const D = S.sel.set === 'tr' ? tr : te, pt = D.X[S.sel.i];
+    ctx.strokeStyle = col.hl; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(px(pt[0]), py(pt[1]), rad + 5, 0, Math.PI * 2); ctx.stroke();
+  }
+  $('cMap').addEventListener('click', (e) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    const x = -R + (e.clientX - r.left) / r.width * 2 * R, y = R - (e.clientY - r.top) / r.height * 2 * R;
+    let best = null, bd = Infinity;
+    for (const [D, set] of [[tr, 'tr'], [te, 'te']]) D.X.forEach((p, i) => { const d = (p[0] - x) ** 2 + (p[1] - y) ** 2; if (d < bd) { bd = d; best = { set, i }; } });
+    S.sel = best; refresh();
+  });
+
+  // ---------- network diagram ----------
+  function drawNet() {
+    const cv = $('cNet'); const { ctx, w, h } = fit(cv);
+    ctx.fillStyle = col.sheet; ctx.fillRect(0, 0, w, h);
+    const H = S.H, D = S.sel.set === 'tr' ? tr : te, x = D.X[S.sel.i], y = D.Y[S.sel.i];
+    forward(net, x[0], x[1], S.relu, sc); backwardPoint(net, y, S.relu, sc);
+    const xi = w * 0.1, xh = w * 0.5, xo = w * 0.76, top = 24, bot = h - 18;
+    const yAt = (k, n) => n === 1 ? (top + bot) / 2 : top + (bot - top) * k / (n - 1);
+    const rH = Math.max(3, Math.min(13, (bot - top) / H / 2.6)), rIO = 15;
+    const useG = S.edge === 'g';
+    const W1 = useG ? net.gW1 : net.W1, W2 = useG ? net.gW2 : net.W2;
+    let mx = 1e-12; for (const v of W1) mx = Math.max(mx, Math.abs(v)); for (const v of W2) mx = Math.max(mx, Math.abs(v));
+    const edge = (x0, y0, x1, y1, v) => {
+      const t = Math.abs(v) / mx; if (t < 0.02) return;
+      ctx.strokeStyle = rgba(v >= 0 ? col.rgb.pos : col.rgb.neg, 0.18 + 0.7 * t);
+      ctx.lineWidth = 0.4 + 4.2 * t; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+    };
+    for (let i = 0; i < H; i++) for (let k = 0; k < 2; k++) edge(xi, yAt(k, 2) * 0.5 + h * 0.25, xh, yAt(i, H), W1[i * 2 + k]);
+    for (let c = 0; c < 3; c++) for (let i = 0; i < H; i++) edge(xh, yAt(i, H), xo, yAt(c, 3) * 0.6 + h * 0.2, W2[c * H + i]);
+    ctx.font = `12px ${getComputedStyle(document.body).getPropertyValue('--font-mono') || 'monospace'}`;
+    ctx.textBaseline = 'middle';
+    // input nodes
+    for (let k = 0; k < 2; k++) {
+      const yy = yAt(k, 2) * 0.5 + h * 0.25;
+      node(xi, yy, rIO, 0.15, col.rgb.ink);
+      ctx.fillStyle = col.ink; ctx.textAlign = 'center'; ctx.fillText(k ? 'x₂' : 'x₁', xi, yy);
+      ctx.textAlign = 'right'; ctx.fillStyle = col.muted; ctx.fillText(x[k].toFixed(2), xi - rIO - 4, yy);
+    }
+    // hidden nodes
+    let hm = 1e-9; for (let i = 0; i < H; i++) hm = Math.max(hm, Math.abs(sc.h[i]));
+    for (let i = 0; i < H; i++) {
+      const yy = yAt(i, H), v = useG ? sc.da[i] : sc.h[i];
+      const t = useG ? Math.min(1, Math.abs(v) / (Math.max(...Array.from(sc.da, Math.abs)) || 1)) : Math.abs(v) / hm;
+      node(xh, yy, rH, 0.08 + 0.85 * t, v < 0 && (useG || !S.relu) ? col.rgb.neg : (useG ? col.rgb.pos : col.rgb.ink));
+      if (H <= 12) { ctx.textAlign = 'left'; ctx.fillStyle = col.muted; ctx.fillText((useG ? 'g ' : '') + v.toFixed(2), xh + rH + 5, yy); }
+    }
+    // output nodes
+    const names = ['A', 'B', 'C'];
+    for (let c = 0; c < 3; c++) {
+      const yy = yAt(c, 3) * 0.6 + h * 0.2;
+      node(xo, yy, rIO, 0.15 + 0.8 * sc.p[c], col.clsRgb[c]);
+      if (c === y) { ctx.strokeStyle = col.hl; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(xo, yy, rIO + 4, 0, Math.PI * 2); ctx.stroke(); }
+      ctx.textAlign = 'left'; ctx.fillStyle = col.ink;
+      ctx.fillText(useG ? `${names[c]} 误差 ${fmtS(sc.dz[c])}` : `${names[c]} ${(sc.p[c] * 100).toFixed(1)}%`, xo + rIO + 8, yy);
+    }
+    ctx.textAlign = 'center'; ctx.fillStyle = col.muted;
+    ctx.fillText('输入', xi, 10); ctx.fillText(`隐藏层 ×${H}${S.relu ? ' (ReLU)' : ''}`, xh, 10); ctx.fillText('输出', xo, 10);
+    $('netTitle').textContent = useG ? '网络内部 · 连线显示梯度（整批平均）' : '网络内部 · 连线显示权重';
+    function node(cx, cy, r, a, rgb) {
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fillStyle = col.sheet; ctx.fill();
+      ctx.fillStyle = rgba(rgb, a); ctx.fill(); ctx.strokeStyle = col.muted; ctx.lineWidth = 1; ctx.stroke();
+    }
+  }
+  const fmtS = (v) => (v >= 0 ? '+' : '') + v.toFixed(3);
+
+  // ---------- trace ----------
+  function fmtV(a, n) { const out = []; for (let i = 0; i < Math.min(n, a.length); i++) out.push((a[i] >= 0 ? '+' : '') + a[i].toFixed(2)); return out.join(' ') + (a.length > n ? `  …共 ${a.length} 个` : ''); }
+  function kv(el, rows) { el.innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join(''); }
+  function drawTrace() {
+    const D = S.sel.set === 'tr' ? tr : te, x = D.X[S.sel.i], y = D.Y[S.sel.i], names = ['A', 'B', 'C'];
+    $('selName').textContent = `${S.sel.set === 'tr' ? '训练点' : '测试点'} #${S.sel.i + 1} · 正确答案 ${names[y]}`;
+    forward(net, x[0], x[1], S.relu, sc); backwardPoint(net, y, S.relu, sc);
+    let best = 0; for (let c = 1; c < 3; c++) if (sc.p[c] > sc.p[best]) best = c;
+    kv($('kvF'), [
+      ['输入 x', `(${x[0].toFixed(2)}, ${x[1].toFixed(2)})`],
+      ['W1·x+b1', fmtV(sc.a, 6)],
+      [S.relu ? 'ReLU 后 h' : 'h（无激活）', fmtV(sc.h, 6)],
+      ['分数 z', fmtV(sc.z, 3)],
+      ['概率 p', Array.from(sc.p, (v, c) => `${names[c]} ${(v * 100).toFixed(1)}%`).join('  ')],
+      ['预测', `${names[best]} ${best === y ? '✓ 对' : '✗ 错'}`],
+      ['loss', `−ln(${sc.p[y].toFixed(3)}) = ${(-Math.log(Math.max(sc.p[y], 1e-300))).toFixed(3)}`],
+    ]);
+    kv($('kvB'), shown.bw ? [
+      ['输出层误差', Array.from(sc.dz, (v, c) => `${names[c]} ${fmtS(v)}`).join('  ')],
+      ['传回隐藏层', fmtV(sc.da, 6)],
+      ['整批平均 loss', S.lastLoss == null ? S.cur.trL.toFixed(4) : S.lastLoss.toFixed(4)],
+      ['梯度大小', `第1层 ${norm(net.gW1, net.gb1).toFixed(4)}  第2层 ${norm(net.gW2, net.gb2).toFixed(4)}`],
+    ] : [['', '点"② 反向"后显示']]);
+    kv($('kvU'), shown.up && S.lastDelta != null ? [
+      ['学习率', fmtLr(S.lr)],
+      ['参数总共移动', S.lastDelta.toFixed(4)],
+      ['更新后训练 loss', S.cur.trL.toFixed(4)],
+    ] : [['', '点"③ 更新"后显示']]);
+    $('stF').className = 'stage' + (S.phase === 1 ? ' on' : '');
+    $('stB').className = 'stage' + (S.phase === 2 ? ' on' : '') + (shown.bw ? '' : ' off');
+    $('stU').className = 'stage' + (S.phase === 0 && shown.up && !S.running && S.step > 0 ? ' on' : '') + (shown.up ? '' : ' off');
+    $('bStep').textContent = phaseLabels[S.phase];
+  }
+  const norm = (a, b) => { let s = 0; for (const v of a) s += v * v; for (const v of b) s += v * v; return Math.sqrt(s); };
+
+  // ---------- neurons ----------
+  function buildNeuronCells() {
+    const box = $('neurons'); box.innerHTML = '';
+    for (let i = 0; i < S.H; i++) {
+      const d = document.createElement('div'); d.className = 'neuron';
+      const c = document.createElement('canvas'); c.width = NG; c.height = NG;
+      const s = document.createElement('span'); s.textContent = '#' + (i + 1);
+      d.append(c, s); box.append(d);
+    }
+  }
+  function drawNeurons() {
+    const cells = $('neurons').children;
+    for (let n = 0; n < S.H; n++) {
+      const cv = cells[n].firstChild, ctx = cv.getContext('2d'), img = ctx.createImageData(NG, NG);
+      let mx = 1e-9; for (let p = 0; p < NG * NG; p++) mx = Math.max(mx, Math.abs(gridH[p * S.H + n]));
+      const dead = S.relu && mx <= 1e-9;
+      for (let p = 0; p < NG * NG; p++) {
+        const v = gridH[p * S.H + n] / mx;
+        const c = v >= 0 ? mix([0, 0, 0], [255, 255, 255], Math.pow(v, 0.8)) : mix([0, 0, 0], col.rgb.neg, -v);
+        img.data[p * 4] = c[0]; img.data[p * 4 + 1] = c[1]; img.data[p * 4 + 2] = c[2]; img.data[p * 4 + 3] = 255;
+      }
+      ctx.putImageData(img, 0, 0);
+      cells[n].className = 'neuron' + (dead ? ' dead' : '');
+      cells[n].lastChild.textContent = '#' + (n + 1) + (dead ? ' 死' : '');
+    }
+  }
+
+  // ---------- loss chart ----------
+  function drawLoss() {
+    const cv = $('cLoss'); const { ctx, w, h } = fit(cv);
+    ctx.fillStyle = col.sheet; ctx.fillRect(0, 0, w, h);
+    const padL = 44, padR = 10, padT = 10, padB = 24;
+    const hs = S.hist; const maxX = Math.max(10, hs.length ? hs[hs.length - 1][0] : 10);
+    let lo = Infinity, hi = -Infinity;
+    for (const [, a, b] of hs) for (const v of [a, b]) if (isFinite(v) && v > 0) { lo = Math.min(lo, v); hi = Math.max(hi, v); }
+    if (!isFinite(lo)) { lo = 0.01; hi = 2; }
+    let e0 = Math.floor(Math.log10(lo)), e1 = Math.ceil(Math.log10(hi)); if (e1 === e0) e1++;
+    const X = (s) => padL + (w - padL - padR) * s / maxX, Y = (v) => padT + (h - padT - padB) * (e1 - Math.log10(Math.max(v, 1e-12))) / (e1 - e0);
+    ctx.font = '11px ' + (getComputedStyle(document.documentElement).getPropertyValue('--font-mono') || 'monospace');
+    ctx.fillStyle = col.muted; ctx.strokeStyle = col.grid; ctx.lineWidth = 1; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    for (let e = e0; e <= e1; e++) { const yy = Y(10 ** e); ctx.beginPath(); ctx.moveTo(padL, yy); ctx.lineTo(w - padR, yy); ctx.stroke(); ctx.fillText(e >= 0 ? String(10 ** e) : (10 ** e).toFixed(-e), padL - 6, yy); }
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    for (const f of [0, 0.5, 1]) ctx.fillText(String(Math.round(maxX * f)), X(maxX * f), h - padB + 6);
+    const line = (idx, c, dash) => {
+      ctx.strokeStyle = c; ctx.lineWidth = 2; ctx.setLineDash(dash); ctx.beginPath();
+      hs.forEach((r, k) => { const xx = X(r[0]), yy = Y(r[idx]); k ? ctx.lineTo(xx, yy) : ctx.moveTo(xx, yy); }); ctx.stroke(); ctx.setLineDash([]);
+    };
+    line(1, col.ink, []); line(2, col.c1, [5, 3]);
+    if (hs.length) { const r = hs[hs.length - 1]; ctx.fillStyle = col.ink; ctx.beginPath(); ctx.arc(X(r[0]), Y(r[1]), 3, 0, Math.PI * 2); ctx.fill(); }
+  }
+
+  // ---------- status ----------
+  function status() {
+    const c = S.cur, el = $('status'); let msg = '', cls = '';
+    const dead = gridH ? countDead() : 0;
+    if (!isFinite(c.trL) || c.trL > 50) { msg = '发散了：学习率太大，参数被一步推飞。把学习率调小，再点"重新初始化"。'; cls = 'warn'; }
+    else if (S.init === 'zero' && S.step > 0) { msg = '全零初始化：所有隐藏神经元一模一样，梯度也一样（用 ReLU 时直接是 0），所以永远学不动。loss 停在 ln3 ≈ 1.099，就是三类各猜三分之一。'; cls = 'warn'; }
+    else if (!S.relu && S.ds !== 'blobs' && S.step > 300) { msg = '没有激活函数：不管有多少神经元，整个网络都等于一个线性函数，只能用直线切平面。看背景色，分界全是直线。'; cls = 'warn'; }
+    else if (S.step > 300 && c.trA - c.teA > 0.08) { msg = `过拟合：训练集 ${(c.trA * 100).toFixed(0)}%，测试集只有 ${(c.teA * 100).toFixed(0)}%。模型把这几个训练点"背"下来了，换新点就不灵。`; cls = 'warn'; }
+    else if (S.step > 1500 && c.trA < 0.75) { msg = `学不会：已经 ${S.step} 步，训练集准确率还只有 ${(c.trA * 100).toFixed(0)}%。可能是神经元太少（容量不够）${dead ? `，或有 ${dead} 个神经元已经"死"了` : ''}，也可能是学习率不合适。`; cls = 'warn'; }
+    else if (c.teA >= 0.97 && S.step > 0) { msg = `学会了：测试集准确率 ${(c.teA * 100).toFixed(0)}%。看下面的小方块，每个神经元各切了一刀，输出层把它们拼成了现在的分界。`; cls = 'good'; }
+    else if (S.step === 0) { msg = '还没训练。可以点"单步"按 前向 → 反向 → 更新 一步步看，也可以点"连续训练"。'; }
+    else { msg = `训练中：第 ${S.step} 步，训练集 loss ${c.trL.toFixed(3)}。`; }
+    el.textContent = msg; el.className = 'status ' + cls;
+  }
+  function countDead() { let k = 0; for (let n = 0; n < S.H; n++) { let mx = 0; for (let p = 0; p < NG * NG; p++) mx = Math.max(mx, gridH[p * S.H + n]); if (mx <= 1e-9) k++; } return S.relu ? k : 0; }
+
+  function refresh() {
+    computeGrid();
+    $('mStep').textContent = S.step;
+    $('mTrL').textContent = fmtL(S.cur.trL); $('mTeL').textContent = fmtL(S.cur.teL);
+    $('mTrA').textContent = (S.cur.trA * 100).toFixed(1) + '%'; $('mTeA').textContent = (S.cur.teA * 100).toFixed(1) + '%';
+    $('mParams').textContent = (2 * S.H + S.H + S.H * 3 + 3).toLocaleString();
+    drawMap(); drawNet(); drawTrace(); drawNeurons(); drawLoss(); status();
+  }
+  const fmtL = (v) => isFinite(v) ? v.toFixed(4) : '∞';
+
+  function loop() {
+    if (!S.running) return;
+    for (let k = 0; k < S.speed; k++) { trainStep(); record(); if (!isFinite(S.cur.trL)) { S.running = false; $('bRun').textContent = '连续训练'; break; } }
+    S.lastLoss = null; refresh();
+    requestAnimationFrame(loop);
+  }
+
+  // ---------- boot ----------
+  readColors();
+  const mq = matchMedia('(prefers-color-scheme: dark)');
+  const retheme = () => { readColors(); refresh(); };
+  mq.addEventListener && mq.addEventListener('change', retheme);
+  new MutationObserver(retheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  window.addEventListener('resize', () => refresh());
+  rebuildData(); reinit(false);
+  // open in a working state: a few hundred steps on the rings so the regions are already forming
+  for (let k = 0; k < 120; k++) { trainStep(); record(); }
+  shown = { fw: true, bw: true, up: true }; refresh();
+})();
+</script>
+
+</html>

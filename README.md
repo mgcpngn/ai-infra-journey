@@ -62,6 +62,7 @@ journal/         按日期的学习日志：关键领悟和被纠正的误解
 
 - [梯度下降实验台](https://mgcpngn.github.io/ai-infra-journey/labs/gradient-lab.html)（[源码](labs/gradient-lab.html)）：拖动学习率，一步步看直线被拉正，或看它发散。
 - [神经网络解剖台](https://mgcpngn.github.io/ai-infra-journey/labs/mlp-anatomy.html)（[源码](labs/mlp-anatomy.html)）：看 784→128→10 网络的结构、参数量、训练与推理的耗时差异、交叉熵。
+- [神经网络实验台](https://mgcpngn.github.io/ai-infra-journey/labs/nn-playground.html)（[源码](labs/nn-playground.html)）：在网页里实时训练一个小网络，单步看前向、反向、更新，看每个神经元和梯度；内置 5 个一键实验（去掉激活、全零初始化、容量不足、过拟合、学习率太大）。
 
 也可以下载 HTML 文件后用浏览器直接打开。
 

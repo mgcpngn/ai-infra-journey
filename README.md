@@ -58,10 +58,12 @@ journal/         按日期的学习日志：关键领悟和被纠正的误解
 
 ## 互动演示
 
-下载后用浏览器直接打开：
+在线直接玩（GitHub Pages）：<https://mgcpngn.github.io/ai-infra-journey/>
 
-- [labs/gradient-lab.html](labs/gradient-lab.html)：梯度下降实验台。拖动学习率，一步步看直线被拉正，或看它发散。
-- [labs/mlp-anatomy.html](labs/mlp-anatomy.html)：神经网络解剖台。看 784→128→10 网络的结构、参数量、训练与推理的耗时差异、交叉熵。
+- [梯度下降实验台](https://mgcpngn.github.io/ai-infra-journey/labs/gradient-lab.html)（[源码](labs/gradient-lab.html)）：拖动学习率，一步步看直线被拉正，或看它发散。
+- [神经网络解剖台](https://mgcpngn.github.io/ai-infra-journey/labs/mlp-anatomy.html)（[源码](labs/mlp-anatomy.html)）：看 784→128→10 网络的结构、参数量、训练与推理的耗时差异、交叉熵。
+
+也可以下载 HTML 文件后用浏览器直接打开。
 
 ## 给想用同样方法学习的人
 

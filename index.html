@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Infra 学习之路</title>
+<style>
+:root{--bg:#fafaf9;--fg:#1c1917;--muted:#57534e;--card:#fff;--line:#e7e5e4;--accent:#2563eb}
+@media (prefers-color-scheme: dark){:root{--bg:#1c1917;--fg:#f5f5f4;--muted:#a8a29e;--card:#292524;--line:#44403c;--accent:#60a5fa}}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.7 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
+main{max-width:720px;margin:0 auto;padding:40px 16px}
+h1{font-size:28px;margin:0 0 8px}
+p{color:var(--muted)}
+a{color:var(--accent);text-decoration:none}
+.card{display:block;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin:14px 0;color:var(--fg)}
+.card:hover{border-color:var(--accent)}
+.card b{display:block;font-size:18px;margin-bottom:4px}
+.card span{color:var(--muted);font-size:14px}
+</style>
+</head>
+<body>
+<main>
+<h1>AI Infra 学习之路</h1>
+<p>零机器学习基础，从手搓模型训练和推理开始，一步步走到推理集群。下面是学习过程中做的互动演示，点开就能玩。</p>
+<a class="card" href="labs/gradient-lab.html"><b>第 1 步 · 梯度下降实验台</b><span>拖动学习率，看直线 y = wx + b 一步步被拉向数据，或者发散。</span></a>
+<a class="card" href="labs/mlp-anatomy.html"><b>第 2 步 · 神经网络解剖台</b><span>MNIST 784→128→10 网络的结构、参数量、训练与推理耗时、交叉熵。</span></a>
+<p>完整路线图、代码和学习笔记见 <a href="https://github.com/mgcpngn/ai-infra-journey">GitHub 仓库</a>。</p>
+</main>
+</body>
+</html>

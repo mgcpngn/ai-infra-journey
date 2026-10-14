@@ -177,13 +177,17 @@ th { font-weight: 600; color: var(--muted); font-size: 13px; }
           <h3><span>① 前向：算出预测</span><span class="what">推理只做这一步</span></h3>
           <dl class="kv" id="kvF"></dl>
         </div>
+        <div class="stage" id="stL">
+          <h3><span>② 算 loss：错了多少</span><span class="what">要用正确答案，推理不做这步</span></h3>
+          <dl class="kv" id="kvL"></dl>
+        </div>
         <div class="stage" id="stB">
-          <h3><span>② 反向：算梯度</span><span class="what">从输出往输入一层层算</span></h3>
+          <h3><span>③ 反向：算梯度</span><span class="what">从输出往输入一层层算</span></h3>
           <dl class="kv" id="kvB"></dl>
           <p class="note">输出层的误差 = 概率 − 正确答案（正确的那类记 1，其他记 0）。负数表示"这一类的分数该往上调"。</p>
         </div>
         <div class="stage" id="stU">
-          <h3><span>③ 更新：所有参数一起改</span><span class="what">新值 = 旧值 − lr × 梯度</span></h3>
+          <h3><span>④ 更新：所有参数一起改</span><span class="what">新值 = 旧值 − lr × 梯度</span></h3>
           <dl class="kv" id="kvU"></dl>
           <p class="note">注意：真正用来更新的梯度，是全部训练点各自梯度的平均，不只是这一个点的。</p>
         </div>
@@ -355,7 +359,7 @@ function applyUpdate(net, lr) {
   const S = { ds: 'rings', H: 8, lr: 0.5, relu: true, init: 'rand', per: 100, speed: 10, edge: 'w',
               running: false, step: 0, phase: 0, seed: 5, sel: { set: 'tr', i: 0 }, hist: [], stride: 1, lastLoss: null, lastDelta: null };
   let net, tr, te, sc, gridS;
-  let shown = { fw: true, bw: false, up: false };
+  let shown = { fw: true, ls: false, bw: false, up: false };
 
   // ---------- theme colors ----------
   let col = {};
@@ -379,7 +383,7 @@ function applyUpdate(net, lr) {
     if (newSeed) S.seed++;
     net = makeNet(S.H, S.init, S.seed); sc = scratch(S.H); gridS = scratch(S.H);
     S.step = 0; S.phase = 0; S.hist = []; S.stride = 1; S.lastLoss = null; S.lastDelta = null;
-    shown = { fw: true, bw: false, up: false };
+    shown = { fw: true, ls: false, bw: false, up: false };
     record(); buildNeuronCells(); refresh();
   }
   function record() {
@@ -418,14 +422,15 @@ function applyUpdate(net, lr) {
   function setLr(v) { S.lr = v; $('rLr').value = Math.log10(v); $('vLr').textContent = fmtLr(v); }
   function setH(h) { S.H = h; $('rH').value = h; $('vH').textContent = h; }
 
-  $('bRun').addEventListener('click', () => { S.running = !S.running; S.phase = 0; shown = { fw: true, bw: true, up: true }; $('bRun').textContent = S.running ? '暂停' : '连续训练'; refresh(); if (S.running) loop(); });
+  $('bRun').addEventListener('click', () => { S.running = !S.running; S.phase = 0; shown = { fw: true, ls: true, bw: true, up: true }; $('bRun').textContent = S.running ? '暂停' : '连续训练'; refresh(); if (S.running) loop(); });
   $('bReset').addEventListener('click', () => reinit(true));
-  const phaseLabels = ['单步：① 前向', '单步：② 反向', '单步：③ 更新'];
+  const phaseLabels = ['单步：① 前向', '单步：② 算 loss', '单步：③ 反向', '单步：④ 更新'];
   $('bStep').addEventListener('click', () => {
     if (S.running) { S.running = false; $('bRun').textContent = '连续训练'; }
-    if (S.phase === 0) { shown = { fw: true, bw: false, up: false }; S.edge = 'w'; S.phase = 1; }
-    else if (S.phase === 1) { S.lastLoss = computeGrads(net, tr, S.relu, sc); shown = { fw: true, bw: true, up: false }; S.edge = 'g'; S.phase = 2; }
-    else { S.lastDelta = applyUpdate(net, S.lr); S.step++; record(); shown = { fw: true, bw: true, up: true }; S.edge = 'w'; S.phase = 0; }
+    if (S.phase === 0) { shown = { fw: true, ls: false, bw: false, up: false }; S.edge = 'w'; S.phase = 1; }
+    else if (S.phase === 1) { shown = { fw: true, ls: true, bw: false, up: false }; S.phase = 2; }
+    else if (S.phase === 2) { S.lastLoss = computeGrads(net, tr, S.relu, sc); shown = { fw: true, ls: true, bw: true, up: false }; S.edge = 'g'; S.phase = 3; }
+    else { S.lastDelta = applyUpdate(net, S.lr); S.step++; record(); shown = { fw: true, ls: true, bw: true, up: true }; S.edge = 'w'; S.phase = 0; }
     syncs.edge(); refresh();
   });
 
@@ -577,22 +582,27 @@ function applyUpdate(net, lr) {
       [S.relu ? 'ReLU 后 h' : 'h（无激活）', fmtV(sc.h, 6)],
       ['分数 z', fmtV(sc.z, 3)],
       ['概率 p', Array.from(sc.p, (v, c) => `${names[c]} ${(v * 100).toFixed(1)}%`).join('  ')],
-      ['预测', `${names[best]} ${best === y ? '✓ 对' : '✗ 错'}`],
-      ['loss', `−ln(${sc.p[y].toFixed(3)}) = ${(-Math.log(Math.max(sc.p[y], 1e-300))).toFixed(3)}`],
+      ['预测', `${names[best]}（推理到这里就结束了）`],
     ]);
+    kv($('kvL'), shown.ls ? [
+      ['正确答案', `${names[y]}，预测 ${names[best]} ${best === y ? '✓ 对' : '✗ 错'}`],
+      ['这个点的 loss', `−ln(${sc.p[y].toFixed(3)}) = ${(-Math.log(Math.max(sc.p[y], 1e-300))).toFixed(3)}`],
+      ['全部训练点平均', S.cur.trL.toFixed(4)],
+    ] : [['', '点"② 算 loss"后显示']]);
     kv($('kvB'), shown.bw ? [
       ['输出层误差', Array.from(sc.dz, (v, c) => `${names[c]} ${fmtS(v)}`).join('  ')],
       ['传回隐藏层', fmtV(sc.da, 6)],
       ['整批平均 loss', S.lastLoss == null ? S.cur.trL.toFixed(4) : S.lastLoss.toFixed(4)],
       ['梯度大小', `第1层 ${norm(net.gW1, net.gb1).toFixed(4)}  第2层 ${norm(net.gW2, net.gb2).toFixed(4)}`],
-    ] : [['', '点"② 反向"后显示']]);
+    ] : [['', '点"③ 反向"后显示']]);
     kv($('kvU'), shown.up && S.lastDelta != null ? [
       ['学习率', fmtLr(S.lr)],
       ['参数总共移动', S.lastDelta.toFixed(4)],
       ['更新后训练 loss', S.cur.trL.toFixed(4)],
-    ] : [['', '点"③ 更新"后显示']]);
+    ] : [['', '点"④ 更新"后显示']]);
     $('stF').className = 'stage' + (S.phase === 1 ? ' on' : '');
-    $('stB').className = 'stage' + (S.phase === 2 ? ' on' : '') + (shown.bw ? '' : ' off');
+    $('stL').className = 'stage' + (S.phase === 2 ? ' on' : '') + (shown.ls ? '' : ' off');
+    $('stB').className = 'stage' + (S.phase === 3 ? ' on' : '') + (shown.bw ? '' : ' off');
     $('stU').className = 'stage' + (S.phase === 0 && shown.up && !S.running && S.step > 0 ? ' on' : '') + (shown.up ? '' : ' off');
     $('bStep').textContent = phaseLabels[S.phase];
   }
@@ -659,7 +669,7 @@ function applyUpdate(net, lr) {
     else if (S.step > 300 && c.trA - c.teA > 0.08) { msg = `过拟合：训练集 ${(c.trA * 100).toFixed(0)}%，测试集只有 ${(c.teA * 100).toFixed(0)}%。模型把这几个训练点"背"下来了，换新点就不灵。`; cls = 'warn'; }
     else if (S.step > 1500 && c.trA < 0.75) { msg = `学不会：已经 ${S.step} 步，训练集准确率还只有 ${(c.trA * 100).toFixed(0)}%。可能是神经元太少（容量不够）${dead ? `，或有 ${dead} 个神经元已经"死"了` : ''}，也可能是学习率不合适。`; cls = 'warn'; }
     else if (c.teA >= 0.97 && S.step > 0) { msg = `学会了：测试集准确率 ${(c.teA * 100).toFixed(0)}%。看下面的小方块，每个神经元各切了一刀，输出层把它们拼成了现在的分界。`; cls = 'good'; }
-    else if (S.step === 0) { msg = '还没训练。可以点"单步"按 前向 → 反向 → 更新 一步步看，也可以点"连续训练"。'; }
+    else if (S.step === 0) { msg = '还没训练。可以点"单步"按 前向 → 算 loss → 反向 → 更新 一步步看，也可以点"连续训练"。'; }
     else { msg = `训练中：第 ${S.step} 步，训练集 loss ${c.trL.toFixed(3)}。`; }
     el.textContent = msg; el.className = 'status ' + cls;
   }
@@ -692,7 +702,7 @@ function applyUpdate(net, lr) {
   rebuildData(); reinit(false);
   // open in a working state: a few hundred steps on the rings so the regions are already forming
   for (let k = 0; k < 120; k++) { trainStep(); record(); }
-  shown = { fw: true, bw: true, up: true }; refresh();
+  shown = { fw: true, ls: true, bw: true, up: true }; refresh();
 })();
 </script>
 

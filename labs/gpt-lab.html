@@ -524,35 +524,35 @@ const DEMO = makeCorpus(1500, 7);
 // ---------- 一、结构图 ----------
 const sh = (c, f) => f(c, c.d / c.H, 4 * c.d);
 const COMP = [
-  { id: 'input', g: 'io', nm: '输入的字', out: c => `[${c.B}, ${c.T}]`, p: () => 0, pf: '0',
+  { id: 'input', w: c => '没有参数', g: 'io', nm: '输入的字', out: c => `[${c.B}, ${c.T}]`, p: () => 0, pf: '0',
     what: '每个字先换成编号，就是它在词表里排第几。训练时一次喂 B 段文字，每段 T 个字，所以输入是一张 B 行 T 列的整数表。', ana: '像查字典先找到页码，后面全靠页码查东西。' },
-  { id: 'tok', g: 'emb', nm: '字表 embedding', out: c => `[${c.B}, ${c.T}, ${c.d}]`, p: c => c.V * c.d, pf: 'V × d',
+  { id: 'tok', w: c => `[${c.V}, ${c.d}]`, g: 'emb', nm: '字表 embedding', out: c => `[${c.B}, ${c.T}, ${c.d}]`, p: c => c.V * c.d, pf: 'V × d',
     what: '一张 V 行 d 列的表，每个字占一行。用编号查表，把每个字换成 d 个数。这些数一开始是随机的，训练中慢慢变成"字的意思"：意思相近的字，这串数也相近。查表本身没有计算。', ana: '你的模型里每个字是 384 个数，这就是 hidden_size。' },
-  { id: 'pos', g: 'emb', nm: '位置表', out: c => `[${c.B}, ${c.T}, ${c.d}]`, p: c => c.T * c.d, pf: 'T × d',
+  { id: 'pos', w: c => `[${c.T}, ${c.d}]`, g: 'emb', nm: '位置表', out: c => `[${c.B}, ${c.T}, ${c.d}]`, p: c => c.T * c.d, pf: 'T × d',
     what: '每个位置（第 1 个字、第 2 个字……）也有一行 d 个数，直接加到字的向量上。没有它，模型分不清"明月"和"月明"，也数不出这一句写到第几个字。', ana: '你把 block 从 128 改成 256，多出来的 49,152 个参数全在这张表里。' },
   { blockStart: true },
-  { id: 'ln1', g: 'attn', nm: 'LayerNorm 1', out: c => `[${c.B}, ${c.T}, ${c.d}]`, p: c => 2 * c.d, pf: '2 × d',
+  { id: 'ln1', w: c => `缩放 [${c.d}] + 偏移 [${c.d}]`, g: 'attn', nm: 'LayerNorm 1', out: c => `[${c.B}, ${c.T}, ${c.d}]`, p: c => 2 * c.d, pf: '2 × d',
     what: '把每个字的 d 个数调成平均 0、波动 1 左右，再乘一组可学的缩放、加一组偏移。作用是让数值稳定，层叠多了也不会越来越大。', ana: '每个字各调各的，不跨字。' },
-  { id: 'qkv', g: 'attn', nm: 'Q、K、V 三个矩阵', out: c => `[${c.B}, ${c.T}, ${3 * c.d}]`, p: c => c.d * 3 * c.d + 3 * c.d, pf: 'd × 3d + 3d',
+  { id: 'qkv', w: c => `[${c.d}, ${3*c.d}] + 偏置 [${3*c.d}]`, g: 'attn', nm: 'Q、K、V 三个矩阵', out: c => `[${c.B}, ${c.T}, ${3 * c.d}]`, p: c => c.d * 3 * c.d + 3 * c.d, pf: 'd × 3d + 3d',
     what: '一个线性层，d 个数进、3d 个数出，切成三串：Q（我想找什么样的字）、K（我是什么样的字）、V（被选中时我交出去的信息）。', ana: '像图书馆：Q 是你的检索词，K 是每本书的标签，V 是书的内容。' },
-  { id: 'score', g: 'attn', nm: '打分 + softmax（每个头分开）', out: c => `[${c.B}, ${c.H}, ${c.T}, ${c.T}]`, p: () => 0, pf: '0（没有参数）',
+  { id: 'score', w: c => '没有参数', g: 'attn', nm: '打分 + softmax（每个头分开）', out: c => `[${c.B}, ${c.H}, ${c.T}, ${c.T}]`, p: () => 0, pf: '0（没有参数）',
     what: '把 d 个数切成 H 份，每份 d/H 个，一份就是一个头。每个字用自己的 Q 和前面每个字的 K 做点积得到分数，除以 √(d/H)，把后面的字遮掉，再 softmax 成加起来等于 1 的权重。第三部分的热力图画的就是它。', ana: '这张表的大小是 T × T，随上下文长度平方增长。', infra: c => `这一层光这些权重就有 ${fmt(c.B * c.H * c.T * c.T)} 个数（float32 约 ${(c.B * c.H * c.T * c.T * 4 / 1048576).toFixed(c.T > 100 ? 0 : 2)} MB）。FlashAttention 就是为了不把它整张存下来。` },
-  { id: 'mix', g: 'attn', nm: '按权重取 V + 输出投影', out: c => `[${c.B}, ${c.T}, ${c.d}]`, p: c => c.d * c.d + c.d, pf: 'd × d + d',
+  { id: 'mix', w: c => `[${c.d}, ${c.d}] + 偏置 [${c.d}]`, g: 'attn', nm: '按权重取 V + 输出投影', out: c => `[${c.B}, ${c.T}, ${c.d}]`, p: c => c.d * c.d + c.d, pf: 'd × d + d',
     what: '用上一步的权重，把前面各字的 V 加权求和。H 个头的结果拼回 d 个数，再过一个 d × d 的线性层。', ana: '注意力是唯一让字和字之间交换信息的地方。' },
-  { id: 'res1', g: 'attn', nm: '残差：加回原来那串数', out: c => `[${c.B}, ${c.T}, ${c.d}]`, p: () => 0, pf: '0',
+  { id: 'res1', w: c => '没有参数', g: 'attn', nm: '残差：加回原来那串数', out: c => `[${c.B}, ${c.T}, ${c.d}]`, p: () => 0, pf: '0',
     what: '注意力算出来的结果是"加"到原来那串数上，不是替换它。信息一路往下传不会丢，反向传播时梯度也能顺着这条路直接流回前面的层。', ana: '第四部分能看到：每过一站，那串数只变一点点。' },
-  { id: 'ln2', g: 'mlp', nm: 'LayerNorm 2', out: c => `[${c.B}, ${c.T}, ${c.d}]`, p: c => 2 * c.d, pf: '2 × d',
+  { id: 'ln2', w: c => `缩放 [${c.d}] + 偏移 [${c.d}]`, g: 'mlp', nm: 'LayerNorm 2', out: c => `[${c.B}, ${c.T}, ${c.d}]`, p: c => 2 * c.d, pf: '2 × d',
     what: '和 LayerNorm 1 一样，进 MLP 前先把数值调稳。', ana: '' },
-  { id: 'mlp1', g: 'mlp', nm: 'MLP 第 1 层 + 激活', out: c => `[${c.B}, ${c.T}, ${4 * c.d}]`, p: c => c.d * 4 * c.d + 4 * c.d, pf: 'd × 4d + 4d',
+  { id: 'mlp1', w: c => `[${c.d}, ${4*c.d}] + 偏置 [${4*c.d}]`, g: 'mlp', nm: 'MLP 第 1 层 + 激活', out: c => `[${c.B}, ${c.T}, ${4 * c.d}]`, p: c => c.d * 4 * c.d + 4 * c.d, pf: 'd × 4d + 4d',
     what: 'd 个数进、4d 个数出，再过 ReLU（你的模型用 GELU，是平滑版的 ReLU）。这 4d 个就是神经元，和你 MNIST 隐藏层是同一个东西，每个神经元看 d 个输入。', ana: '你的模型这里是 1536 个神经元，也就是 LLM 配置里的 intermediate_size。' },
-  { id: 'mlp2', g: 'mlp', nm: 'MLP 第 2 层 + 残差', out: c => `[${c.B}, ${c.T}, ${c.d}]`, p: c => 4 * c.d * c.d + c.d, pf: '4d × d + d',
+  { id: 'mlp2', w: c => `[${4*c.d}, ${c.d}] + 偏置 [${c.d}]`, g: 'mlp', nm: 'MLP 第 2 层 + 残差', out: c => `[${c.B}, ${c.T}, ${c.d}]`, p: c => 4 * c.d * c.d + c.d, pf: '4d × d + d',
     what: '4d 个数压回 d 个，再加回残差。注意力负责字和字之间传信息；MLP 是每个字自己"想一想"，各个位置各算各的，互不相看。', ana: 'MLP 两层加起来约 8d² 个参数，注意力约 4d²，所以 MLP 是大头。' },
   { blockEnd: true },
-  { id: 'lnf', g: 'head', nm: '最终 LayerNorm', out: c => `[${c.B}, ${c.T}, ${c.d}]`, p: c => 2 * c.d, pf: '2 × d', what: '所有块走完，最后再调一次数值。', ana: '' },
-  { id: 'head', g: 'head', nm: '输出层', out: c => `[${c.B}, ${c.T}, ${c.V}]`, p: c => c.d * c.V, pf: 'd × V',
+  { id: 'lnf', w: c => `缩放 [${c.d}] + 偏移 [${c.d}]`, g: 'head', nm: '最终 LayerNorm', out: c => `[${c.B}, ${c.T}, ${c.d}]`, p: c => 2 * c.d, pf: '2 × d', what: '所有块走完，最后再调一次数值。', ana: '' },
+  { id: 'head', w: c => `[${c.d}, ${c.V}]`, g: 'head', nm: '输出层', out: c => `[${c.B}, ${c.T}, ${c.V}]`, p: c => c.d * c.V, pf: 'd × V',
     what: 'd 个数进、V 个数出：给词表里每个字打一个分（logits），分越高越可能是下一个字。每个位置都会打一遍分。', ana: '',
     infra: c => `这张分数表有 ${fmt(c.B * c.T * c.V)} 个数（float32 约 ${(c.B * c.T * c.V * 4 / 1048576).toFixed(0)} MB）。第 5 步一开始爆显存，就是生成时每个位置都算了它，其实只要最后一个位置。` },
-  { id: 'loss', g: 'io', nm: 'softmax + loss', out: () => '1 个数', p: () => 0, pf: '0',
+  { id: 'loss', w: c => '没有参数', g: 'io', nm: 'softmax + loss', out: () => '1 个数', p: () => 0, pf: '0',
     what: '把分数变成概率，取"正确的下一个字"那一项的概率，取 −ln 就是这个位置的 loss，所有位置求平均。完全瞎猜时 loss = ln(V)。', ana: '生成时不算 loss，而是按概率抽一个字，接到后面再来一遍。' },
 ];
 function labCfg() { return { V: S.V || 123, d: S.d, H: S.H, L: S.L, T: S.T, B: S.B }; }
@@ -582,12 +582,14 @@ function renderDetail() {
   $('detail').className = 'panel detail g-' + k.g;
   $('detail').innerHTML = `<h3>${k.nm}</h3><p>${k.what}</p>${k.ana ? `<p class="analogy">${k.ana}</p>` : ''}
   <div class="tablewrap"><table class="spec"><thead><tr><th></th><th>这里的小模型</th><th>你 4060 上的模型</th></tr></thead><tbody>
-  <tr><th>输出形状</th><td class="mono">${k.out(a)}</td><td class="mono">${k.out(y)}</td></tr>
+  <tr><th>参数表的形状</th><td class="mono">${k.w(a)}</td><td class="mono">${k.w(y)}</td></tr>
   <tr><th>参数量${mult}</th><td class="mono">${fmt(pa)}</td><td class="mono">${fmt(py)}</td></tr>
   <tr><th>公式</th><td class="mono" colspan="2">${k.pf}</td></tr>
   ${inB ? '' : `<tr><th>× 层数</th><td class="mono">${fmt(pa * a.L)}</td><td class="mono">${fmt(py * y.L)}</td></tr>`}
+  <tr><th>算出来的数据形状</th><td class="mono">${k.out(a)}</td><td class="mono">${k.out(y)}</td></tr>
   </tbody></table></div>
-  <p class="cap">形状里 B = batch，T = 一次看几个字，d = 每个字几个数，H = 头数，V = 词表大小。这里 B=${a.B}、T=${a.T}、d=${a.d}、H=${a.H}、V=${a.V}；你的是 B=64、T=256、d=384、H=6、V=8182。</p>
+  <p class="cap">「参数表」是模型里存着、训练时被调整的数，参数量就是它的大小，和 batch、输入多少字无关。「数据形状」是这一步算出来的中间结果，每次前向都重新算、用完就扔，随 batch 和字数变大。</p>
+  <p class="cap">B = batch，T = 一次看几个字，d = 每个字几个数，H = 头数，V = 词表大小。这里 B=${a.B}、T=${a.T}、d=${a.d}、H=${a.H}、V=${a.V}；你的是 B=64、T=256、d=384、H=6、V=8182。</p>
   ${k.infra ? `<p class="analogy">Infra 视角：${k.infra(y)}</p>` : ''}`;
 }
 function renderPBars() {

@@ -1,0 +1,770 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>body{margin:0}[hidden]{display:none!important}</style>
+<title>GPT 实验台</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@600;800&family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: same engineering-notebook bench as the earlier labs. 1) the model opened up as a clickable stack with a spec card; 2) live training bench; 3) attention heatmaps for one line; 4) one character's 384-number vector, stage by stage. */
+:root {
+  --paper: #F3F6F7; --sheet: #FFFFFF; --ink: #15222B; --muted: #5B6B75; --grid: #DCE4E8;
+  --emb: #0E7C7B;   /* embedding */
+  --attn: #6A4CC0;  /* attention */
+  --mlp: #C46A00;   /* MLP */
+  --head: #2563A8;  /* output layer */
+  --neg: #C2362F; --pos: #2563A8;
+  --font-display: "Noto Serif SC", "Songti SC", serif;
+  --font-body: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --paper: #0F171C; --sheet: #16222A; --ink: #E3EBEF; --muted: #93A5B0; --grid: #26353F;
+  --emb: #3CC6C2; --attn: #A68BFA; --mlp: #F0A23B; --head: #6AA8F0; --neg: #F06A60; --pos: #6AA8F0; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --paper: #0F171C; --sheet: #16222A; --ink: #E3EBEF; --muted: #93A5B0; --grid: #26353F;
+  --emb: #3CC6C2; --attn: #A68BFA; --mlp: #F0A23B; --head: #6AA8F0; --neg: #F06A60; --pos: #6AA8F0; color-scheme: dark; }
+
+body { background: var(--paper); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.7; }
+.wrap { max-width: 1120px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 28px 64px; display: grid; gap: 26px; }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; line-height: 1.3; }
+h1 { font-size: clamp(26px, 4.4vw, 38px); font-weight: 800; }
+h2 { font-size: 21px; font-weight: 600; }
+h3 { font-size: 17px; font-weight: 600; }
+.lede { max-width: 68ch; color: var(--muted); margin: 8px 0 0; }
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.panel { background: var(--sheet); border: 1px solid var(--grid); border-radius: 6px; padding: 14px; min-width: 0; }
+.label { font-size: 12px; letter-spacing: .06em; color: var(--muted); margin: 0 0 8px; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; align-items: baseline; }
+.cap { font-size: 13px; color: var(--muted); margin: 8px 0 0; }
+.sec { display: grid; gap: 12px; }
+.sec > header p { margin: 4px 0 0; color: var(--muted); max-width: 72ch; }
+canvas { width: 100%; display: block; }
+.row { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.row.wideL { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); }
+@media (max-width: 860px) { .row, .row.wideL { grid-template-columns: minmax(0, 1fr); } }
+
+/* 结构图 */
+.stack { display: grid; gap: 6px; }
+.box { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; text-align: left; width: 100%; padding: 7px 10px; border-radius: 4px; border: 1px solid var(--grid); border-left: 4px solid var(--g, var(--muted)); background: var(--paper); color: var(--ink); cursor: pointer; font: inherit; font-size: 14px; }
+.box:hover { border-color: var(--muted); border-left-color: var(--g, var(--muted)); }
+.box[aria-pressed="true"] { background: var(--sheet); box-shadow: 0 0 0 2px var(--g, var(--muted)); }
+.box .nm { font-weight: 700; }
+.box .sh { font-family: var(--font-mono); font-size: 12px; color: var(--muted); white-space: nowrap; }
+.box .gbar { grid-column: 1 / -1; height: 3px; background: var(--grid); border-radius: 2px; overflow: hidden; }
+.box .gbar i { display: block; height: 100%; width: 0; background: var(--g, var(--muted)); transition: width .3s; }
+.g-emb { --g: var(--emb); } .g-attn { --g: var(--attn); } .g-mlp { --g: var(--mlp); } .g-head { --g: var(--head); } .g-io { --g: var(--muted); }
+.block { border: 1px dashed var(--muted); border-radius: 6px; padding: 8px; display: grid; gap: 6px; position: relative; }
+.block .tag { font-size: 12px; color: var(--muted); display: flex; justify-content: space-between; }
+.arrow { text-align: center; color: var(--muted); font-size: 12px; line-height: 1; }
+.detail h3 { margin-bottom: 4px; }
+.detail p { margin: 6px 0; }
+.spec { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px; }
+.spec th, .spec td { text-align: left; padding: 5px 6px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+.spec th { color: var(--muted); font-weight: 500; font-size: 12px; }
+.spec td.mono { white-space: nowrap; }
+.tablewrap { overflow-x: auto; }
+.analogy { border-left: 3px solid var(--g, var(--muted)); padding: 4px 10px; background: var(--paper); border-radius: 0 4px 4px 0; font-size: 14px; }
+.bars { display: grid; gap: 10px; }
+.sbar { display: flex; height: 18px; border-radius: 3px; overflow: hidden; }
+.sbar span { display: block; height: 100%; }
+.sbar-lab { display: flex; justify-content: space-between; font-size: 13px; gap: 8px; flex-wrap: wrap; }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+.sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: -1px; margin-right: 4px; }
+
+/* 控件 */
+.ctrl { display: grid; gap: 10px; }
+.field { display: grid; gap: 4px; }
+.field > .lab { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 14px; }
+.field .val { font-family: var(--font-mono); font-weight: 600; font-variant-numeric: tabular-nums; }
+.seg { display: flex; flex-wrap: wrap; gap: 6px; }
+.seg button[aria-pressed="true"] { background: var(--ink); color: var(--sheet); border-color: var(--ink); }
+input[type=range] { width: 100%; accent-color: var(--attn); }
+input[type=text], textarea { font: inherit; font-size: 14px; width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid var(--grid); border-radius: 4px; background: var(--paper); color: var(--ink); }
+textarea { min-height: 90px; resize: vertical; font-size: 13px; }
+button { font: inherit; font-size: 14px; border: 1px solid var(--grid); background: var(--paper); color: var(--ink); padding: 5px 11px; border-radius: 4px; cursor: pointer; }
+button:hover { border-color: var(--muted); }
+button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid var(--attn); outline-offset: 2px; }
+button:disabled { opacity: .5; cursor: default; }
+.btns { display: flex; flex-wrap: wrap; gap: 8px; }
+.btns .primary { background: var(--ink); color: var(--sheet); border-color: var(--ink); font-weight: 600; }
+.metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.metric { background: var(--paper); border-radius: 4px; padding: 6px 8px; min-width: 0; }
+.metric .k { font-size: 12px; color: var(--muted); }
+.metric .v { font-family: var(--font-mono); font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.status { font-size: 14px; padding: 8px 10px; border-radius: 4px; background: var(--paper); border-left: 3px solid var(--muted); }
+.phase { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+.phase div { background: var(--paper); border-radius: 4px; padding: 6px 8px; font-size: 13px; border-top: 3px solid var(--grid); }
+.phase div b { display: block; font-size: 13px; }
+.phase div.on { border-top-color: var(--attn); }
+@media (max-width: 560px) { .phase { grid-template-columns: repeat(2, minmax(0, 1fr)); } .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.samples { font-family: var(--font-body); font-size: 15px; display: grid; gap: 4px; max-height: 260px; overflow-y: auto; }
+.samples div { display: grid; grid-template-columns: 70px minmax(0, 1fr); gap: 8px; }
+.samples .st { font-family: var(--font-mono); font-size: 12px; color: var(--muted); padding-top: 3px; }
+.gen { font-size: 18px; font-family: var(--font-display); background: var(--paper); border-radius: 4px; padding: 10px 12px; min-height: 52px; white-space: pre-wrap; }
+#cLoss { height: 210px; }
+
+/* 注意力 */
+.heads { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; }
+.heads button { padding: 4px; display: grid; gap: 2px; font-size: 12px; }
+.heads canvas { aspect-ratio: 1 / 1; }
+#cAttn { max-width: 520px; aspect-ratio: 1 / 1; cursor: pointer; }
+.who { display: grid; gap: 3px; font-size: 14px; }
+.who .r { display: grid; grid-template-columns: 2.2em minmax(0, 1fr) 3.4em; gap: 6px; align-items: center; }
+.who .r .b { height: 10px; border-radius: 2px; background: var(--attn); }
+.who .r.pred .b { background: var(--head); }
+.who .ch { font-family: var(--font-display); font-size: 16px; text-align: center; }
+.who .pc { font-family: var(--font-mono); font-size: 12px; text-align: right; color: var(--muted); }
+.chars { display: flex; flex-wrap: wrap; gap: 3px; }
+.chars button { font-family: var(--font-display); font-size: 17px; padding: 2px 7px; min-width: 2em; }
+.chars button[aria-pressed="true"] { background: var(--attn); color: var(--sheet); border-color: var(--attn); }
+#cStream { height: auto; }
+@media (prefers-reduced-motion: reduce) { .box .gbar i { transition: none; } }
+</style>
+<div class="wrap">
+<header>
+  <h1>GPT 实验台</h1>
+  <p class="lede">一个和你 4060 上那个小 GPT 结构完全一样、只是小了几百倍的模型，在浏览器里现场训练。点开每个零件看它是什么、数据长什么样、有多少参数；训练时看 loss 怎么降、梯度流到哪里；训练完打开注意力，看每个字在"看"谁。</p>
+</header>
+
+<section class="sec" id="s-arch">
+  <header><h2>一、把 Transformer 拆开</h2><p>从上往下就是一个字的旅程。点任意一块，右边显示它的作用、形状和参数量，左列是这里的小模型，右列是你 4060 上的模型。每块下面的细条是训练时流过它的梯度大小。</p></header>
+  <div class="row wideL">
+    <div class="panel"><div class="stack" id="stack"></div></div>
+    <div class="panel detail" id="detail" aria-live="polite"></div>
+  </div>
+  <div class="panel">
+    <p class="label"><span>参数都花在哪了</span><span class="legend"><span><i class="sw" style="background:var(--emb)"></i>embedding</span><span><i class="sw" style="background:var(--attn)"></i>注意力</span><span><i class="sw" style="background:var(--mlp)"></i>MLP</span><span><i class="sw" style="background:var(--head)"></i>输出层</span></span></p>
+    <div class="bars" id="pbars"></div>
+    <p class="cap">你的模型 MLP 占最多。小模型里 embedding 和输出层占比更高，因为每个字的向量太短（d 小），而词表大小没变多少。</p>
+  </div>
+</section>
+
+<section class="sec" id="s-train">
+  <header><h2>二、现场训练</h2><p>每一步：随机抽 batch 段文字，每段 block 个字，让模型在每个位置猜下一个字，算 loss，反向传播算出每个参数的梯度，再用 AdamW 更新。和你在 4060 上跑的是同一套流程。</p></header>
+  <div class="row">
+    <div class="panel ctrl">
+      <div class="field"><div class="lab"><span>层数 L（Transformer 块）</span><span class="val" id="vL">2</span></div><div class="seg" id="segL"></div></div>
+      <div class="field"><div class="lab"><span>头数 H</span><span class="val" id="vH">4</span></div><div class="seg" id="segH"></div></div>
+      <div class="field"><div class="lab"><span>每个字用几个数 d</span><span class="val" id="vD">48</span></div><div class="seg" id="segD"></div></div>
+      <div class="field"><div class="lab"><span>一次看几个字 block</span><span class="val" id="vT">32</span></div><div class="seg" id="segT"></div></div>
+      <div class="field"><div class="lab"><span>batch（每步几段）</span><span class="val" id="vB">8</span></div><div class="seg" id="segB"></div></div>
+      <div class="field"><div class="lab"><span>学习率</span><span class="val" id="vLR">0.003</span></div><input type="range" id="lr" min="-4" max="-1.5" step="0.05" value="-2.52"></div>
+      <div class="field"><div class="lab"><span>训练文字</span></div>
+        <div class="seg" id="segData"><button data-v="demo" aria-pressed="true">练习语料</button><button data-v="mine" aria-pressed="false">我自己贴的</button></div>
+        <textarea id="mytext" hidden placeholder="把 data/tang.txt 里的一段复制进来，几千字以上效果更好。点「重置」后生效。"></textarea>
+        <p class="cap" id="dataInfo"></p>
+      </div>
+      <p class="cap">改结构或换文字后点「重置」，模型从随机参数重新开始。</p>
+    </div>
+    <div class="panel ctrl">
+      <div class="btns"><button class="primary" id="bRun">开始训练</button><button id="bStep">走一步</button><button id="bReset">重置</button></div>
+      <div class="metrics">
+        <div class="metric"><div class="k">步数</div><div class="v" id="mStep">0</div></div>
+        <div class="metric"><div class="k">epoch</div><div class="v" id="mEpoch">0</div></div>
+        <div class="metric"><div class="k">参数量</div><div class="v" id="mParams">—</div></div>
+        <div class="metric"><div class="k">训练 loss</div><div class="v" id="mTrain">—</div></div>
+        <div class="metric"><div class="k">验证 loss</div><div class="v" id="mVal">—</div></div>
+        <div class="metric"><div class="k">每秒处理字数</div><div class="v" id="mTps">—</div></div>
+      </div>
+      <div class="phase" id="phase">
+        <div data-p="0"><b>① 前向</b><span id="ph0">—</span></div>
+        <div data-p="1"><b>② 算 loss</b><span id="ph1">—</span></div>
+        <div data-p="2"><b>③ 反向</b><span id="ph2">—</span></div>
+        <div data-p="3"><b>④ 更新</b><span id="ph3">—</span></div>
+      </div>
+      <div><p class="label"><span>loss 曲线</span><span class="legend"><span><i class="sw" style="background:var(--ink)"></i>训练</span><span><i class="sw" style="background:var(--mlp)"></i>验证</span><span>虚线：瞎猜 ln(词表)</span></span></p><canvas id="cLoss"></canvas></div>
+      <p class="status" id="status">还没开始。点「开始训练」。</p>
+    </div>
+  </div>
+  <div class="row">
+    <div class="panel"><p class="label"><span>训练过程中它写的诗（每 50 步抽一首）</span></p><div class="samples" id="samples"></div></div>
+    <div class="panel ctrl">
+      <p class="label"><span>现在让它写</span></p>
+      <div class="field"><div class="lab"><span>温度</span><span class="val" id="vTemp">0.8</span></div><input type="range" id="temp" min="0.1" max="2" step="0.05" value="0.8"></div>
+      <div class="field"><div class="lab"><span>开头（可留空）</span></div><input type="text" id="prefix" value="" maxlength="20"></div>
+      <div class="btns"><button id="bGen">写一首</button></div>
+      <div class="gen" id="gen"></div>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="s-attn">
+  <header><h2>三、打开注意力</h2><p>输入一句话，看模型读它时每个头的注意力。格子越深，表示这一行的字越"看重"那一列的字。右上角永远是空的：每个字只能看自己和前面的字（因果遮罩），这就是生成只能一个字一个字来的原因。</p></header>
+  <div class="panel ctrl">
+    <div class="field"><div class="lab"><span>要读的句子（最多 block 个字）</span></div><input type="text" id="aText"></div>
+    <div class="btns"><span class="cap" style="margin:0">第几层：</span><div class="seg" id="segAL"></div><button id="bInspect">看注意力</button></div>
+  </div>
+  <div class="row">
+    <div class="panel"><p class="label"><span id="aTitle">一个头的注意力</span><span>行 = 正在算的字，列 = 被看的字</span></p><canvas id="cAttn"></canvas><p class="label" style="margin-top:12px"><span>这一层的每个头（点开看大图）</span></p><div class="heads" id="heads"></div></div>
+    <div class="panel"><p class="label"><span>点上面句子里的一个字</span></p><div class="chars" id="aChars"></div>
+      <h3 style="margin-top:12px">它在看谁</h3><div class="who" id="who"></div>
+      <h3 style="margin-top:12px">它猜下一个字</h3><div class="who" id="pred"></div>
+      <p class="cap">注意力只决定"从哪些字那里取信息"，最后猜什么字由整个模型一起决定。</p>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="s-stream">
+  <header><h2>四、一个字的旅程</h2><p>上面选中的那个字，在模型里一直是一串 d 个数（这里 d 小，你的模型是 384 个）。每一行是它经过一站之后的样子：蓝是正数，红是负数，颜色越深绝对值越大。注意力和 MLP 都是在这串数上"加"一点东西（残差连接），所以相邻两行看起来很像。</p></header>
+  <div class="panel"><canvas id="cStream"></canvas><p class="cap" id="streamCap"></p></div>
+</section>
+</div>
+<script>
+// GPTCORE START
+// 一个能在浏览器里训练的小 GPT：结构和 nanoGPT 一样（pre-LN、多头因果注意力、MLP 4 倍宽），手写前向和反向。
+function rng(seed) { let a = seed | 0; return function () { a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function gauss(r) { let u = 0, v = 0; while (u === 0) u = r(); while (v === 0) v = r(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
+
+function makeGPT(cfg, seed) {
+  const { V, d, H, L, T } = cfg, r = rng(seed || 1), F = 4 * d;
+  const P = []; const m = { cfg, P, layers: [] };
+  function p(name, group, layer, n, init) {
+    const t = { name, group, layer, data: new Float32Array(n), grad: new Float32Array(n), m: new Float32Array(n), v: new Float32Array(n) };
+    if (init === 'one') t.data.fill(1); else if (init > 0) for (let i = 0; i < n; i++) t.data[i] = gauss(r) * init;
+    P.push(t); return t;
+  }
+  const s = 0.02, sp = 0.02 / Math.sqrt(2 * L);
+  m.tok = p('字表 embedding', 'emb', -1, V * d, s);
+  m.pos = p('位置表', 'emb', -1, T * d, s);
+  for (let l = 0; l < L; l++) m.layers.push({
+    g1: p('LayerNorm 1', 'attn', l, d, 'one'), b1: p('LayerNorm 1 偏置', 'attn', l, d, 0),
+    Wqkv: p('Q/K/V 矩阵', 'attn', l, d * 3 * d, s), bqkv: p('Q/K/V 偏置', 'attn', l, 3 * d, 0),
+    Wo: p('注意力输出矩阵', 'attn', l, d * d, sp), bo: p('注意力输出偏置', 'attn', l, d, 0),
+    g2: p('LayerNorm 2', 'mlp', l, d, 'one'), b2: p('LayerNorm 2 偏置', 'mlp', l, d, 0),
+    W1: p('MLP 第 1 层', 'mlp', l, d * F, s), c1: p('MLP 第 1 层偏置', 'mlp', l, F, 0),
+    W2: p('MLP 第 2 层', 'mlp', l, F * d, sp), c2: p('MLP 第 2 层偏置', 'mlp', l, d, 0),
+  });
+  m.gf = p('最终 LayerNorm', 'head', -1, d, 'one'); m.bf = p('最终 LayerNorm 偏置', 'head', -1, d, 0);
+  m.Wh = p('输出层', 'head', -1, d * V, s);
+  m.step = 0;
+  return m;
+}
+function countParams(m) { let n = 0; for (const t of m.P) n += t.data.length; return n; }
+
+// 公式算参数量（和 makeGPT 一致，也用来算你 4060 上那个模型）
+function paramFormula(c) {
+  const { V, d, L, T } = c, F = 4 * d;
+  const emb = V * d + T * d;
+  const attn = L * (2 * d + d * 3 * d + 3 * d + d * d + d);
+  const mlp = L * (2 * d + d * F + F + F * d + d);
+  const head = 2 * d + d * V;
+  return { emb, attn, mlp, head, total: emb + attn + mlp + head };
+}
+
+// C[n,m] = A[n,k] · B[k,m] (+ bias)
+function mm(A, B, n, k, mdim, bias, C) {
+  C = C || new Float32Array(n * mdim);
+  for (let i = 0; i < n; i++) {
+    const ci = i * mdim;
+    if (bias) for (let j = 0; j < mdim; j++) C[ci + j] = bias[j]; else for (let j = 0; j < mdim; j++) C[ci + j] = 0;
+    for (let q = 0; q < k; q++) {
+      const a = A[i * k + q]; if (a === 0) continue;
+      const bq = q * mdim;
+      for (let j = 0; j < mdim; j++) C[ci + j] += a * B[bq + j];
+    }
+  }
+  return C;
+}
+// 反向：dA = dC·Bᵀ，dB += Aᵀ·dC，db += Σ dC
+function mmBack(A, B, dC, n, k, mdim, dA, dB, db) {
+  if (dA) for (let i = 0; i < n; i++) for (let q = 0; q < k; q++) {
+    let s = 0; const bq = q * mdim, ci = i * mdim;
+    for (let j = 0; j < mdim; j++) s += dC[ci + j] * B[bq + j];
+    dA[i * k + q] += s;
+  }
+  for (let i = 0; i < n; i++) {
+    const ci = i * mdim;
+    if (db) for (let j = 0; j < mdim; j++) db[j] += dC[ci + j];
+    for (let q = 0; q < k; q++) {
+      const a = A[i * k + q]; if (a === 0) continue;
+      const bq = q * mdim;
+      for (let j = 0; j < mdim; j++) dB[bq + j] += a * dC[ci + j];
+    }
+  }
+}
+function ln(X, g, b, n, d) {
+  const Y = new Float32Array(n * d), Xh = new Float32Array(n * d), rs = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    let mu = 0; for (let j = 0; j < d; j++) mu += X[i * d + j]; mu /= d;
+    let va = 0; for (let j = 0; j < d; j++) { const z = X[i * d + j] - mu; va += z * z; } va /= d;
+    const r = 1 / Math.sqrt(va + 1e-5); rs[i] = r;
+    for (let j = 0; j < d; j++) { const xh = (X[i * d + j] - mu) * r; Xh[i * d + j] = xh; Y[i * d + j] = xh * g[j] + b[j]; }
+  }
+  return { Y, Xh, rs };
+}
+function lnBack(c, g, dY, n, d, dX, dg, db) {
+  for (let i = 0; i < n; i++) {
+    let s1 = 0, s2 = 0;
+    for (let j = 0; j < d; j++) { const k = i * d + j, dxh = dY[k] * g[j]; s1 += dxh; s2 += dxh * c.Xh[k]; dg[j] += dY[k] * c.Xh[k]; db[j] += dY[k]; }
+    s1 /= d; s2 /= d;
+    for (let j = 0; j < d; j++) { const k = i * d + j; dX[k] += c.rs[i] * (dY[k] * g[j] - s1 - c.Xh[k] * s2); }
+  }
+}
+// 多头因果注意力。qkv: [B*T, 3d]，返回 O [B*T, d] 和每个头的注意力权重 A [B, H, T, T]
+function attn(qkv, B, T, d, H) {
+  const hd = d / H, sc = 1 / Math.sqrt(hd), d3 = 3 * d;
+  const O = new Float32Array(B * T * d), A = new Float32Array(B * H * T * T);
+  for (let b = 0; b < B; b++) for (let h = 0; h < H; h++) {
+    const base = (b * H + h) * T * T;
+    for (let t = 0; t < T; t++) {
+      const qo = (b * T + t) * d3 + h * hd;
+      let mx = -1e30;
+      for (let u = 0; u <= t; u++) {
+        const ko = (b * T + u) * d3 + d + h * hd; let s = 0;
+        for (let i = 0; i < hd; i++) s += qkv[qo + i] * qkv[ko + i];
+        s *= sc; A[base + t * T + u] = s; if (s > mx) mx = s;
+      }
+      let z = 0;
+      for (let u = 0; u <= t; u++) { const e = Math.exp(A[base + t * T + u] - mx); A[base + t * T + u] = e; z += e; }
+      const oo = (b * T + t) * d + h * hd;
+      for (let u = 0; u <= t; u++) {
+        const w = A[base + t * T + u] / z; A[base + t * T + u] = w;
+        const vo = (b * T + u) * d3 + 2 * d + h * hd;
+        for (let i = 0; i < hd; i++) O[oo + i] += w * qkv[vo + i];
+      }
+    }
+  }
+  return { O, A };
+}
+function attnBack(qkv, A, dO, B, T, d, H, dqkv) {
+  const hd = d / H, sc = 1 / Math.sqrt(hd), d3 = 3 * d, dA = new Float32Array(T);
+  for (let b = 0; b < B; b++) for (let h = 0; h < H; h++) {
+    const base = (b * H + h) * T * T;
+    for (let t = 0; t < T; t++) {
+      const oo = (b * T + t) * d + h * hd, qo = (b * T + t) * d3 + h * hd;
+      let dot = 0;
+      for (let u = 0; u <= t; u++) {
+        const vo = (b * T + u) * d3 + 2 * d + h * hd, w = A[base + t * T + u];
+        let s = 0;
+        for (let i = 0; i < hd; i++) { s += dO[oo + i] * qkv[vo + i]; dqkv[vo + i] += w * dO[oo + i]; }
+        dA[u] = s; dot += s * w;
+      }
+      for (let u = 0; u <= t; u++) {
+        const ds = A[base + t * T + u] * (dA[u] - dot) * sc;
+        if (ds === 0) continue;
+        const ko = (b * T + u) * d3 + d + h * hd;
+        for (let i = 0; i < hd; i++) { dqkv[qo + i] += ds * qkv[ko + i]; dqkv[ko + i] += ds * qkv[qo + i]; }
+      }
+    }
+  }
+}
+
+// 前向。ids: 长度 B*T 的字编号。targets 可选：给了就算 loss。keep=true 时保留每一站的中间结果给可视化用。
+function forward(m, ids, B, T, targets, keep) {
+  const { V, d, H } = m.cfg, F = 4 * d, N = B * T;
+  const x = new Float32Array(N * d);
+  for (let b = 0; b < B; b++) for (let t = 0; t < T; t++) {
+    const n = b * T + t, id = ids[n];
+    for (let j = 0; j < d; j++) x[n * d + j] = m.tok.data[id * d + j] + m.pos.data[t * d + j];
+  }
+  const C = { B, T, N, ids, layers: [], stream: keep ? [{ name: '字表 + 位置表', x: x.slice() }] : null };
+  let cur = x;
+  for (let l = 0; l < m.layers.length; l++) {
+    const Ly = m.layers[l], c = { xin: cur };
+    c.ln1 = ln(cur, Ly.g1.data, Ly.b1.data, N, d);
+    c.qkv = mm(c.ln1.Y, Ly.Wqkv.data, N, d, 3 * d, Ly.bqkv.data);
+    const at = attn(c.qkv, B, T, d, H); c.O = at.O; c.A = at.A;
+    const pr = mm(c.O, Ly.Wo.data, N, d, d, Ly.bo.data);
+    const x2 = new Float32Array(N * d); for (let i = 0; i < N * d; i++) x2[i] = cur[i] + pr[i];
+    c.xmid = x2;
+    if (keep) C.stream.push({ name: `第 ${l + 1} 块 注意力之后`, x: x2.slice() });
+    c.ln2 = ln(x2, Ly.g2.data, Ly.b2.data, N, d);
+    c.h = mm(c.ln2.Y, Ly.W1.data, N, d, F, Ly.c1.data);
+    c.r = new Float32Array(N * F); for (let i = 0; i < N * F; i++) c.r[i] = c.h[i] > 0 ? c.h[i] : 0;
+    const mo = mm(c.r, Ly.W2.data, N, F, d, Ly.c2.data);
+    const x3 = new Float32Array(N * d); for (let i = 0; i < N * d; i++) x3[i] = x2[i] + mo[i];
+    if (keep) C.stream.push({ name: `第 ${l + 1} 块 MLP 之后`, x: x3.slice() });
+    C.layers.push(c); cur = x3;
+  }
+  C.xf = cur;
+  C.lnf = ln(cur, m.gf.data, m.bf.data, N, d);
+  C.logits = mm(C.lnf.Y, m.Wh.data, N, d, V, null);
+  if (targets) {
+    let L = 0; C.probs = new Float32Array(N * V);
+    for (let n = 0; n < N; n++) {
+      let mx = -1e30; for (let v = 0; v < V; v++) if (C.logits[n * V + v] > mx) mx = C.logits[n * V + v];
+      let z = 0; for (let v = 0; v < V; v++) { const e = Math.exp(C.logits[n * V + v] - mx); C.probs[n * V + v] = e; z += e; }
+      for (let v = 0; v < V; v++) C.probs[n * V + v] /= z;
+      L -= Math.log(Math.max(C.probs[n * V + targets[n]], 1e-30));
+    }
+    C.loss = L / N; C.targets = targets;
+  }
+  return C;
+}
+
+function backward(m, C) {
+  const { V, d, H } = m.cfg, F = 4 * d, { B, T, N } = C;
+  for (const p of m.P) p.grad.fill(0);
+  const dlog = new Float32Array(N * V);
+  for (let n = 0; n < N; n++) { for (let v = 0; v < V; v++) dlog[n * V + v] = C.probs[n * V + v] / N; dlog[n * V + C.targets[n]] -= 1 / N; }
+  const dlf = new Float32Array(N * d);
+  mmBack(C.lnf.Y, m.Wh.data, dlog, N, d, V, dlf, m.Wh.grad, null);
+  let dx = new Float32Array(N * d);
+  lnBack(C.lnf, m.gf.data, dlf, N, d, dx, m.gf.grad, m.bf.grad);
+  for (let l = m.layers.length - 1; l >= 0; l--) {
+    const Ly = m.layers[l], c = C.layers[l];
+    // x3 = x2 + MLP(LN2(x2))
+    const dr = new Float32Array(N * F);
+    mmBack(c.r, Ly.W2.data, dx, N, F, d, dr, Ly.W2.grad, Ly.c2.grad);
+    for (let i = 0; i < N * F; i++) if (c.h[i] <= 0) dr[i] = 0;
+    const dl2 = new Float32Array(N * d);
+    mmBack(c.ln2.Y, Ly.W1.data, dr, N, d, F, dl2, Ly.W1.grad, Ly.c1.grad);
+    const dx2 = dx.slice();
+    lnBack(c.ln2, Ly.g2.data, dl2, N, d, dx2, Ly.g2.grad, Ly.b2.grad);
+    // x2 = x + Attn(LN1(x))
+    const dO = new Float32Array(N * d);
+    mmBack(c.O, Ly.Wo.data, dx2, N, d, d, dO, Ly.Wo.grad, Ly.bo.grad);
+    const dqkv = new Float32Array(N * 3 * d);
+    attnBack(c.qkv, c.A, dO, B, T, d, H, dqkv);
+    const dl1 = new Float32Array(N * d);
+    mmBack(c.ln1.Y, Ly.Wqkv.data, dqkv, N, d, 3 * d, dl1, Ly.Wqkv.grad, Ly.bqkv.grad);
+    const dx1 = dx2.slice();
+    lnBack(c.ln1, Ly.g1.data, dl1, N, d, dx1, Ly.g1.grad, Ly.b1.grad);
+    dx = dx1;
+  }
+  for (let b = 0; b < B; b++) for (let t = 0; t < T; t++) {
+    const n = b * T + t, id = C.ids[n];
+    for (let j = 0; j < d; j++) { m.tok.grad[id * d + j] += dx[n * d + j]; m.pos.grad[t * d + j] += dx[n * d + j]; }
+  }
+}
+
+// AdamW 更新，返回各组梯度大小（更新前）
+function gradNorms(m) {
+  const g = { emb: 0, attn: 0, mlp: 0, head: 0, total: 0 };
+  for (const p of m.P) { let s = 0; for (let i = 0; i < p.grad.length; i++) s += p.grad[i] * p.grad[i]; g[p.group] += s; g.total += s; }
+  for (const k in g) g[k] = Math.sqrt(g[k]);
+  return g;
+}
+function adam(m, lr, clip) {
+  const g = gradNorms(m), sc = clip && g.total > clip ? clip / g.total : 1;
+  m.step++; const b1 = 0.9, b2 = 0.99, t = m.step, c1 = 1 - Math.pow(b1, t), c2 = 1 - Math.pow(b2, t);
+  for (const p of m.P) {
+    const decay = p.data.length > 4 * m.cfg.d && p.group !== 'none' ? 0.01 : 0;
+    for (let i = 0; i < p.data.length; i++) {
+      const gr = p.grad[i] * sc;
+      p.m[i] = b1 * p.m[i] + (1 - b1) * gr; p.v[i] = b2 * p.v[i] + (1 - b2) * gr * gr;
+      p.data[i] -= lr * ((p.m[i] / c1) / (Math.sqrt(p.v[i] / c2) + 1e-8) + decay * p.data[i]);
+    }
+  }
+  return g;
+}
+
+function makeVocab(text) { const chars = Array.from(new Set(Array.from(text))).sort(); const idx = new Map(chars.map((c, i) => [c, i])); return { chars, idx }; }
+function encode(voc, s) { return Array.from(s).filter(c => voc.idx.has(c)).map(c => voc.idx.get(c)); }
+function batch(data, B, T, r) {
+  const X = new Int32Array(B * T), Y = new Int32Array(B * T);
+  for (let b = 0; b < B; b++) { const s = Math.floor(r() * (data.length - T - 1)); for (let t = 0; t < T; t++) { X[b * T + t] = data[s + t]; Y[b * T + t] = data[s + t + 1]; } }
+  return { X, Y };
+}
+function trainStep(m, data, B, lr, r) {
+  const { X, Y } = batch(data, B, m.cfg.T, r);
+  const C = forward(m, X, B, m.cfg.T, Y, false);
+  backward(m, C);
+  const g = adam(m, lr, 1.0);
+  return { loss: C.loss, g };
+}
+function evalLoss(m, data, B, r, reps) {
+  let s = 0; for (let k = 0; k < reps; k++) { const { X, Y } = batch(data, B, m.cfg.T, r); s += forward(m, X, B, m.cfg.T, Y, false).loss; } return s / reps;
+}
+// 下一个字的概率分布（只取最后一个位置）
+function nextProbs(m, ids, temp) {
+  const T = Math.min(ids.length, m.cfg.T), x = ids.slice(-T), V = m.cfg.V;
+  const C = forward(m, Int32Array.from(x), 1, T, null, false);
+  const lo = C.logits.subarray((T - 1) * V, T * V), p = new Float32Array(V);
+  let mx = -1e30; for (let v = 0; v < V; v++) if (lo[v] > mx) mx = lo[v];
+  let z = 0; for (let v = 0; v < V; v++) { p[v] = Math.exp((lo[v] - mx) / temp); z += p[v]; }
+  for (let v = 0; v < V; v++) p[v] /= z;
+  return p;
+}
+function generate(m, ids, n, temp, r, stopAt) {
+  const out = ids.slice();
+  for (let k = 0; k < n; k++) {
+    const p = nextProbs(m, out, temp); let u = r(), c = 0;
+    for (; c < p.length - 1; c++) { u -= p[c]; if (u <= 0) break; }
+    out.push(c); if (stopAt !== undefined && c === stopAt) break;
+  }
+  return out;
+}
+// GPTCORE END
+// CORPUS START
+// 练习用的"仿五言七言"语料：用词块按 2+3、2+2+3 拼句，第 2、4 句押同一个韵。不是真唐诗，只保留格式和押韵规律。
+function makeCorpus(nPoems, seed) {
+  const r = rng(seed || 7), pick = a => a[Math.floor(r() * a.length)];
+  const two = ['春风','秋月','青山','白云','孤舟','江水','落日','寒梅','夜雨','长亭','烟波','古道','空山','明月','流水','飞花','归雁','残阳','清泉','远客','柴门','松间','竹林','溪边','楼上','天涯','故园','边城','渔火','钟声'];
+  const mid = ['独坐','遥望','初照','忽见','又逢','欲问','犹听','漫随','相送','暗随','轻摇','半掩'];
+  const rhyme = [
+    ['归','飞','稀','衣','微','扉','晖','矶'],
+    ['山','间','还','关','闲','湾','颜','攀'],
+    ['流','愁','秋','楼','舟','游','头','留'],
+    ['声','明','情','城','行','生','清','平'],
+  ];
+  const two3 = ['照','满','入','绕','过','映','落','向','动','隔'];
+  const tail2 = ['高楼','孤城','寒江','深林','小桥','远天','长河','空庭','旧亭','苍苔','碧溪','荒村'];
+  const free = ['里','外','上','下','中','前','边','尽'];
+  function line(n, end) {
+    const head = n === 7 ? pick(two) + pick(mid) : pick(two);
+    if (end) return head + pick(two3) + pick(tail2).slice(0, 1) + end;
+    return head + pick(two3) + pick(tail2).slice(0, 1) + pick(free);
+  }
+  const out = [];
+  for (let k = 0; k < nPoems; k++) {
+    const n = r() < 0.5 ? 5 : 7, g = pick(rhyme);
+    out.push(line(n) + '，' + line(n, pick(g)) + '。' + line(n) + '，' + line(n, pick(g)) + '。');
+  }
+  return out.join('\n') + '\n';
+}
+// CORPUS END
+const WORKER_SRC = "// GPTCORE START\n// 一个能在浏览器里训练的小 GPT：结构和 nanoGPT 一样（pre-LN、多头因果注意力、MLP 4 倍宽），手写前向和反向。\nfunction rng(seed) { let a = seed | 0; return function () { a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }\nfunction gauss(r) { let u = 0, v = 0; while (u === 0) u = r(); while (v === 0) v = r(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }\n\nfunction makeGPT(cfg, seed) {\n  const { V, d, H, L, T } = cfg, r = rng(seed || 1), F = 4 * d;\n  const P = []; const m = { cfg, P, layers: [] };\n  function p(name, group, layer, n, init) {\n    const t = { name, group, layer, data: new Float32Array(n), grad: new Float32Array(n), m: new Float32Array(n), v: new Float32Array(n) };\n    if (init === 'one') t.data.fill(1); else if (init > 0) for (let i = 0; i < n; i++) t.data[i] = gauss(r) * init;\n    P.push(t); return t;\n  }\n  const s = 0.02, sp = 0.02 / Math.sqrt(2 * L);\n  m.tok = p('字表 embedding', 'emb', -1, V * d, s);\n  m.pos = p('位置表', 'emb', -1, T * d, s);\n  for (let l = 0; l < L; l++) m.layers.push({\n    g1: p('LayerNorm 1', 'attn', l, d, 'one'), b1: p('LayerNorm 1 偏置', 'attn', l, d, 0),\n    Wqkv: p('Q/K/V 矩阵', 'attn', l, d * 3 * d, s), bqkv: p('Q/K/V 偏置', 'attn', l, 3 * d, 0),\n    Wo: p('注意力输出矩阵', 'attn', l, d * d, sp), bo: p('注意力输出偏置', 'attn', l, d, 0),\n    g2: p('LayerNorm 2', 'mlp', l, d, 'one'), b2: p('LayerNorm 2 偏置', 'mlp', l, d, 0),\n    W1: p('MLP 第 1 层', 'mlp', l, d * F, s), c1: p('MLP 第 1 层偏置', 'mlp', l, F, 0),\n    W2: p('MLP 第 2 层', 'mlp', l, F * d, sp), c2: p('MLP 第 2 层偏置', 'mlp', l, d, 0),\n  });\n  m.gf = p('最终 LayerNorm', 'head', -1, d, 'one'); m.bf = p('最终 LayerNorm 偏置', 'head', -1, d, 0);\n  m.Wh = p('输出层', 'head', -1, d * V, s);\n  m.step = 0;\n  return m;\n}\nfunction countParams(m) { let n = 0; for (const t of m.P) n += t.data.length; return n; }\n\n// 公式算参数量（和 makeGPT 一致，也用来算你 4060 上那个模型）\nfunction paramFormula(c) {\n  const { V, d, L, T } = c, F = 4 * d;\n  const emb = V * d + T * d;\n  const attn = L * (2 * d + d * 3 * d + 3 * d + d * d + d);\n  const mlp = L * (2 * d + d * F + F + F * d + d);\n  const head = 2 * d + d * V;\n  return { emb, attn, mlp, head, total: emb + attn + mlp + head };\n}\n\n// C[n,m] = A[n,k] · B[k,m] (+ bias)\nfunction mm(A, B, n, k, mdim, bias, C) {\n  C = C || new Float32Array(n * mdim);\n  for (let i = 0; i < n; i++) {\n    const ci = i * mdim;\n    if (bias) for (let j = 0; j < mdim; j++) C[ci + j] = bias[j]; else for (let j = 0; j < mdim; j++) C[ci + j] = 0;\n    for (let q = 0; q < k; q++) {\n      const a = A[i * k + q]; if (a === 0) continue;\n      const bq = q * mdim;\n      for (let j = 0; j < mdim; j++) C[ci + j] += a * B[bq + j];\n    }\n  }\n  return C;\n}\n// 反向：dA = dC·Bᵀ，dB += Aᵀ·dC，db += Σ dC\nfunction mmBack(A, B, dC, n, k, mdim, dA, dB, db) {\n  if (dA) for (let i = 0; i < n; i++) for (let q = 0; q < k; q++) {\n    let s = 0; const bq = q * mdim, ci = i * mdim;\n    for (let j = 0; j < mdim; j++) s += dC[ci + j] * B[bq + j];\n    dA[i * k + q] += s;\n  }\n  for (let i = 0; i < n; i++) {\n    const ci = i * mdim;\n    if (db) for (let j = 0; j < mdim; j++) db[j] += dC[ci + j];\n    for (let q = 0; q < k; q++) {\n      const a = A[i * k + q]; if (a === 0) continue;\n      const bq = q * mdim;\n      for (let j = 0; j < mdim; j++) dB[bq + j] += a * dC[ci + j];\n    }\n  }\n}\nfunction ln(X, g, b, n, d) {\n  const Y = new Float32Array(n * d), Xh = new Float32Array(n * d), rs = new Float32Array(n);\n  for (let i = 0; i < n; i++) {\n    let mu = 0; for (let j = 0; j < d; j++) mu += X[i * d + j]; mu /= d;\n    let va = 0; for (let j = 0; j < d; j++) { const z = X[i * d + j] - mu; va += z * z; } va /= d;\n    const r = 1 / Math.sqrt(va + 1e-5); rs[i] = r;\n    for (let j = 0; j < d; j++) { const xh = (X[i * d + j] - mu) * r; Xh[i * d + j] = xh; Y[i * d + j] = xh * g[j] + b[j]; }\n  }\n  return { Y, Xh, rs };\n}\nfunction lnBack(c, g, dY, n, d, dX, dg, db) {\n  for (let i = 0; i < n; i++) {\n    let s1 = 0, s2 = 0;\n    for (let j = 0; j < d; j++) { const k = i * d + j, dxh = dY[k] * g[j]; s1 += dxh; s2 += dxh * c.Xh[k]; dg[j] += dY[k] * c.Xh[k]; db[j] += dY[k]; }\n    s1 /= d; s2 /= d;\n    for (let j = 0; j < d; j++) { const k = i * d + j; dX[k] += c.rs[i] * (dY[k] * g[j] - s1 - c.Xh[k] * s2); }\n  }\n}\n// 多头因果注意力。qkv: [B*T, 3d]，返回 O [B*T, d] 和每个头的注意力权重 A [B, H, T, T]\nfunction attn(qkv, B, T, d, H) {\n  const hd = d / H, sc = 1 / Math.sqrt(hd), d3 = 3 * d;\n  const O = new Float32Array(B * T * d), A = new Float32Array(B * H * T * T);\n  for (let b = 0; b < B; b++) for (let h = 0; h < H; h++) {\n    const base = (b * H + h) * T * T;\n    for (let t = 0; t < T; t++) {\n      const qo = (b * T + t) * d3 + h * hd;\n      let mx = -1e30;\n      for (let u = 0; u <= t; u++) {\n        const ko = (b * T + u) * d3 + d + h * hd; let s = 0;\n        for (let i = 0; i < hd; i++) s += qkv[qo + i] * qkv[ko + i];\n        s *= sc; A[base + t * T + u] = s; if (s > mx) mx = s;\n      }\n      let z = 0;\n      for (let u = 0; u <= t; u++) { const e = Math.exp(A[base + t * T + u] - mx); A[base + t * T + u] = e; z += e; }\n      const oo = (b * T + t) * d + h * hd;\n      for (let u = 0; u <= t; u++) {\n        const w = A[base + t * T + u] / z; A[base + t * T + u] = w;\n        const vo = (b * T + u) * d3 + 2 * d + h * hd;\n        for (let i = 0; i < hd; i++) O[oo + i] += w * qkv[vo + i];\n      }\n    }\n  }\n  return { O, A };\n}\nfunction attnBack(qkv, A, dO, B, T, d, H, dqkv) {\n  const hd = d / H, sc = 1 / Math.sqrt(hd), d3 = 3 * d, dA = new Float32Array(T);\n  for (let b = 0; b < B; b++) for (let h = 0; h < H; h++) {\n    const base = (b * H + h) * T * T;\n    for (let t = 0; t < T; t++) {\n      const oo = (b * T + t) * d + h * hd, qo = (b * T + t) * d3 + h * hd;\n      let dot = 0;\n      for (let u = 0; u <= t; u++) {\n        const vo = (b * T + u) * d3 + 2 * d + h * hd, w = A[base + t * T + u];\n        let s = 0;\n        for (let i = 0; i < hd; i++) { s += dO[oo + i] * qkv[vo + i]; dqkv[vo + i] += w * dO[oo + i]; }\n        dA[u] = s; dot += s * w;\n      }\n      for (let u = 0; u <= t; u++) {\n        const ds = A[base + t * T + u] * (dA[u] - dot) * sc;\n        if (ds === 0) continue;\n        const ko = (b * T + u) * d3 + d + h * hd;\n        for (let i = 0; i < hd; i++) { dqkv[qo + i] += ds * qkv[ko + i]; dqkv[ko + i] += ds * qkv[qo + i]; }\n      }\n    }\n  }\n}\n\n// 前向。ids: 长度 B*T 的字编号。targets 可选：给了就算 loss。keep=true 时保留每一站的中间结果给可视化用。\nfunction forward(m, ids, B, T, targets, keep) {\n  const { V, d, H } = m.cfg, F = 4 * d, N = B * T;\n  const x = new Float32Array(N * d);\n  for (let b = 0; b < B; b++) for (let t = 0; t < T; t++) {\n    const n = b * T + t, id = ids[n];\n    for (let j = 0; j < d; j++) x[n * d + j] = m.tok.data[id * d + j] + m.pos.data[t * d + j];\n  }\n  const C = { B, T, N, ids, layers: [], stream: keep ? [{ name: '字表 + 位置表', x: x.slice() }] : null };\n  let cur = x;\n  for (let l = 0; l < m.layers.length; l++) {\n    const Ly = m.layers[l], c = { xin: cur };\n    c.ln1 = ln(cur, Ly.g1.data, Ly.b1.data, N, d);\n    c.qkv = mm(c.ln1.Y, Ly.Wqkv.data, N, d, 3 * d, Ly.bqkv.data);\n    const at = attn(c.qkv, B, T, d, H); c.O = at.O; c.A = at.A;\n    const pr = mm(c.O, Ly.Wo.data, N, d, d, Ly.bo.data);\n    const x2 = new Float32Array(N * d); for (let i = 0; i < N * d; i++) x2[i] = cur[i] + pr[i];\n    c.xmid = x2;\n    if (keep) C.stream.push({ name: `第 ${l + 1} 块 注意力之后`, x: x2.slice() });\n    c.ln2 = ln(x2, Ly.g2.data, Ly.b2.data, N, d);\n    c.h = mm(c.ln2.Y, Ly.W1.data, N, d, F, Ly.c1.data);\n    c.r = new Float32Array(N * F); for (let i = 0; i < N * F; i++) c.r[i] = c.h[i] > 0 ? c.h[i] : 0;\n    const mo = mm(c.r, Ly.W2.data, N, F, d, Ly.c2.data);\n    const x3 = new Float32Array(N * d); for (let i = 0; i < N * d; i++) x3[i] = x2[i] + mo[i];\n    if (keep) C.stream.push({ name: `第 ${l + 1} 块 MLP 之后`, x: x3.slice() });\n    C.layers.push(c); cur = x3;\n  }\n  C.xf = cur;\n  C.lnf = ln(cur, m.gf.data, m.bf.data, N, d);\n  C.logits = mm(C.lnf.Y, m.Wh.data, N, d, V, null);\n  if (targets) {\n    let L = 0; C.probs = new Float32Array(N * V);\n    for (let n = 0; n < N; n++) {\n      let mx = -1e30; for (let v = 0; v < V; v++) if (C.logits[n * V + v] > mx) mx = C.logits[n * V + v];\n      let z = 0; for (let v = 0; v < V; v++) { const e = Math.exp(C.logits[n * V + v] - mx); C.probs[n * V + v] = e; z += e; }\n      for (let v = 0; v < V; v++) C.probs[n * V + v] /= z;\n      L -= Math.log(Math.max(C.probs[n * V + targets[n]], 1e-30));\n    }\n    C.loss = L / N; C.targets = targets;\n  }\n  return C;\n}\n\nfunction backward(m, C) {\n  const { V, d, H } = m.cfg, F = 4 * d, { B, T, N } = C;\n  for (const p of m.P) p.grad.fill(0);\n  const dlog = new Float32Array(N * V);\n  for (let n = 0; n < N; n++) { for (let v = 0; v < V; v++) dlog[n * V + v] = C.probs[n * V + v] / N; dlog[n * V + C.targets[n]] -= 1 / N; }\n  const dlf = new Float32Array(N * d);\n  mmBack(C.lnf.Y, m.Wh.data, dlog, N, d, V, dlf, m.Wh.grad, null);\n  let dx = new Float32Array(N * d);\n  lnBack(C.lnf, m.gf.data, dlf, N, d, dx, m.gf.grad, m.bf.grad);\n  for (let l = m.layers.length - 1; l >= 0; l--) {\n    const Ly = m.layers[l], c = C.layers[l];\n    // x3 = x2 + MLP(LN2(x2))\n    const dr = new Float32Array(N * F);\n    mmBack(c.r, Ly.W2.data, dx, N, F, d, dr, Ly.W2.grad, Ly.c2.grad);\n    for (let i = 0; i < N * F; i++) if (c.h[i] <= 0) dr[i] = 0;\n    const dl2 = new Float32Array(N * d);\n    mmBack(c.ln2.Y, Ly.W1.data, dr, N, d, F, dl2, Ly.W1.grad, Ly.c1.grad);\n    const dx2 = dx.slice();\n    lnBack(c.ln2, Ly.g2.data, dl2, N, d, dx2, Ly.g2.grad, Ly.b2.grad);\n    // x2 = x + Attn(LN1(x))\n    const dO = new Float32Array(N * d);\n    mmBack(c.O, Ly.Wo.data, dx2, N, d, d, dO, Ly.Wo.grad, Ly.bo.grad);\n    const dqkv = new Float32Array(N * 3 * d);\n    attnBack(c.qkv, c.A, dO, B, T, d, H, dqkv);\n    const dl1 = new Float32Array(N * d);\n    mmBack(c.ln1.Y, Ly.Wqkv.data, dqkv, N, d, 3 * d, dl1, Ly.Wqkv.grad, Ly.bqkv.grad);\n    const dx1 = dx2.slice();\n    lnBack(c.ln1, Ly.g1.data, dl1, N, d, dx1, Ly.g1.grad, Ly.b1.grad);\n    dx = dx1;\n  }\n  for (let b = 0; b < B; b++) for (let t = 0; t < T; t++) {\n    const n = b * T + t, id = C.ids[n];\n    for (let j = 0; j < d; j++) { m.tok.grad[id * d + j] += dx[n * d + j]; m.pos.grad[t * d + j] += dx[n * d + j]; }\n  }\n}\n\n// AdamW 更新，返回各组梯度大小（更新前）\nfunction gradNorms(m) {\n  const g = { emb: 0, attn: 0, mlp: 0, head: 0, total: 0 };\n  for (const p of m.P) { let s = 0; for (let i = 0; i < p.grad.length; i++) s += p.grad[i] * p.grad[i]; g[p.group] += s; g.total += s; }\n  for (const k in g) g[k] = Math.sqrt(g[k]);\n  return g;\n}\nfunction adam(m, lr, clip) {\n  const g = gradNorms(m), sc = clip && g.total > clip ? clip / g.total : 1;\n  m.step++; const b1 = 0.9, b2 = 0.99, t = m.step, c1 = 1 - Math.pow(b1, t), c2 = 1 - Math.pow(b2, t);\n  for (const p of m.P) {\n    const decay = p.data.length > 4 * m.cfg.d && p.group !== 'none' ? 0.01 : 0;\n    for (let i = 0; i < p.data.length; i++) {\n      const gr = p.grad[i] * sc;\n      p.m[i] = b1 * p.m[i] + (1 - b1) * gr; p.v[i] = b2 * p.v[i] + (1 - b2) * gr * gr;\n      p.data[i] -= lr * ((p.m[i] / c1) / (Math.sqrt(p.v[i] / c2) + 1e-8) + decay * p.data[i]);\n    }\n  }\n  return g;\n}\n\nfunction makeVocab(text) { const chars = Array.from(new Set(Array.from(text))).sort(); const idx = new Map(chars.map((c, i) => [c, i])); return { chars, idx }; }\nfunction encode(voc, s) { return Array.from(s).filter(c => voc.idx.has(c)).map(c => voc.idx.get(c)); }\nfunction batch(data, B, T, r) {\n  const X = new Int32Array(B * T), Y = new Int32Array(B * T);\n  for (let b = 0; b < B; b++) { const s = Math.floor(r() * (data.length - T - 1)); for (let t = 0; t < T; t++) { X[b * T + t] = data[s + t]; Y[b * T + t] = data[s + t + 1]; } }\n  return { X, Y };\n}\nfunction trainStep(m, data, B, lr, r) {\n  const { X, Y } = batch(data, B, m.cfg.T, r);\n  const C = forward(m, X, B, m.cfg.T, Y, false);\n  backward(m, C);\n  const g = adam(m, lr, 1.0);\n  return { loss: C.loss, g };\n}\nfunction evalLoss(m, data, B, r, reps) {\n  let s = 0; for (let k = 0; k < reps; k++) { const { X, Y } = batch(data, B, m.cfg.T, r); s += forward(m, X, B, m.cfg.T, Y, false).loss; } return s / reps;\n}\n// 下一个字的概率分布（只取最后一个位置）\nfunction nextProbs(m, ids, temp) {\n  const T = Math.min(ids.length, m.cfg.T), x = ids.slice(-T), V = m.cfg.V;\n  const C = forward(m, Int32Array.from(x), 1, T, null, false);\n  const lo = C.logits.subarray((T - 1) * V, T * V), p = new Float32Array(V);\n  let mx = -1e30; for (let v = 0; v < V; v++) if (lo[v] > mx) mx = lo[v];\n  let z = 0; for (let v = 0; v < V; v++) { p[v] = Math.exp((lo[v] - mx) / temp); z += p[v]; }\n  for (let v = 0; v < V; v++) p[v] /= z;\n  return p;\n}\nfunction generate(m, ids, n, temp, r, stopAt) {\n  const out = ids.slice();\n  for (let k = 0; k < n; k++) {\n    const p = nextProbs(m, out, temp); let u = r(), c = 0;\n    for (; c < p.length - 1; c++) { u -= p[c]; if (u <= 0) break; }\n    out.push(c); if (stopAt !== undefined && c === stopAt) break;\n  }\n  return out;\n}\n// GPTCORE END\n// CORPUS START\n// 练习用的\"仿五言七言\"语料：用词块按 2+3、2+2+3 拼句，第 2、4 句押同一个韵。不是真唐诗，只保留格式和押韵规律。\nfunction makeCorpus(nPoems, seed) {\n  const r = rng(seed || 7), pick = a => a[Math.floor(r() * a.length)];\n  const two = ['春风','秋月','青山','白云','孤舟','江水','落日','寒梅','夜雨','长亭','烟波','古道','空山','明月','流水','飞花','归雁','残阳','清泉','远客','柴门','松间','竹林','溪边','楼上','天涯','故园','边城','渔火','钟声'];\n  const mid = ['独坐','遥望','初照','忽见','又逢','欲问','犹听','漫随','相送','暗随','轻摇','半掩'];\n  const rhyme = [\n    ['归','飞','稀','衣','微','扉','晖','矶'],\n    ['山','间','还','关','闲','湾','颜','攀'],\n    ['流','愁','秋','楼','舟','游','头','留'],\n    ['声','明','情','城','行','生','清','平'],\n  ];\n  const two3 = ['照','满','入','绕','过','映','落','向','动','隔'];\n  const tail2 = ['高楼','孤城','寒江','深林','小桥','远天','长河','空庭','旧亭','苍苔','碧溪','荒村'];\n  const free = ['里','外','上','下','中','前','边','尽'];\n  function line(n, end) {\n    const head = n === 7 ? pick(two) + pick(mid) : pick(two);\n    if (end) return head + pick(two3) + pick(tail2).slice(0, 1) + end;\n    return head + pick(two3) + pick(tail2).slice(0, 1) + pick(free);\n  }\n  const out = [];\n  for (let k = 0; k < nPoems; k++) {\n    const n = r() < 0.5 ? 5 : 7, g = pick(rhyme);\n    out.push(line(n) + '，' + line(n, pick(g)) + '。' + line(n) + '，' + line(n, pick(g)) + '。');\n  }\n  return out.join('\\n') + '\\n';\n}\n// CORPUS END\n// WORKER START（和 core、corpus 一起放进 Web Worker 里跑，页面不会卡）\nlet M = null, voc = null, tr = null, va = null, B = 8, lr = 3e-3, running = false, R = rng(11), nl = -1, trainChars = 0;\nlet lastPost = 0, tokCount = 0, tStart = 0, lastLoss = null, lastG = null, lastVal = null;\nfunction sample(prefix, temp, n) {\n  const start = prefix && prefix.length ? encode(voc, prefix) : (nl >= 0 ? [nl] : [Math.floor(R() * voc.chars.length)]);\n  const ids = start.length ? start : [0];\n  const out = generate(M, ids, n || 60, temp, R, nl >= 0 ? nl : undefined);\n  return out.map(i => voc.chars[i]).join('').replace(/^\\n/, '').replace(/\\n$/, '');\n}\nfunction progress(force) {\n  const now = Date.now();\n  if (!force && now - lastPost < 200) return;\n  lastPost = now;\n  const tps = tStart ? tokCount / ((now - tStart) / 1000) : 0;\n  postMessage({ type: 'progress', step: M.step, loss: lastLoss, val: lastVal, g: lastG, tps, epoch: M.step * B * M.cfg.T / trainChars, running });\n}\nfunction one() {\n  const o = trainStep(M, tr, B, lr, R);\n  lastLoss = o.loss; lastG = o.g; tokCount += B * M.cfg.T;\n  if (M.step % 25 === 0 || M.step === 1) { lastVal = evalLoss(M, va, 8, R, 2); postMessage({ type: 'point', step: M.step, loss: lastLoss, val: lastVal }); }\n  else postMessage({ type: 'point', step: M.step, loss: lastLoss });\n  if (M.step % 50 === 0) postMessage({ type: 'sample', step: M.step, text: sample('', 0.8) });\n}\nfunction loop() {\n  if (!running) return;\n  const t0 = Date.now();\n  while (Date.now() - t0 < 120) one();\n  progress(false);\n  setTimeout(loop, 0);\n}\nonmessage = function (e) {\n  const d = e.data;\n  if (d.type === 'init') {\n    running = false; R = rng(d.seed || 11);\n    voc = makeVocab(d.text); nl = voc.idx.has('\\n') ? voc.idx.get('\\n') : -1;\n    const all = encode(voc, d.text), cut = Math.floor(all.length * 0.9);\n    tr = all.slice(0, cut); va = all.slice(cut); trainChars = tr.length;\n    const cfg = Object.assign({ V: voc.chars.length }, d.cfg);\n    if (va.length < cfg.T + 2) { postMessage({ type: 'error', msg: '文字太短了，至少要比 block 长好几倍。' }); return; }\n    M = makeGPT(cfg, d.seed || 1); B = d.B; lr = d.lr;\n    lastLoss = lastG = lastVal = null; tokCount = 0; tStart = 0;\n    const f = paramFormula(cfg);\n    postMessage({ type: 'ready', V: cfg.V, cfg, params: countParams(M), f, trainChars, valChars: va.length, chars: voc.chars });\n  } else if (d.type === 'set') {\n    if (d.B) B = d.B; if (d.lr) lr = d.lr;\n  } else if (d.type === 'run') {\n    running = d.on; if (running) { tokCount = 0; tStart = Date.now(); loop(); } else progress(true);\n  } else if (d.type === 'step') {\n    running = false; one(); lastVal = evalLoss(M, va, 8, R, 2); progress(true);\n  } else if (d.type === 'gen') {\n    postMessage({ type: 'gen', text: sample(d.prefix, d.temp, 60) });\n  } else if (d.type === 'inspect') {\n    const ids = encode(voc, d.text).slice(0, M.cfg.T);\n    if (ids.length < 2) { postMessage({ type: 'error', msg: '句子里能认出的字太少了，换一句试试。' }); return; }\n    const T = ids.length, C = forward(M, Int32Array.from(ids), 1, T, null, true), V = M.cfg.V, d2 = M.cfg.d, H = M.cfg.H;\n    const preds = [];\n    for (let t = 0; t < T; t++) {\n      const lo = C.logits.subarray(t * V, (t + 1) * V); let mx = -1e30; for (let v = 0; v < V; v++) if (lo[v] > mx) mx = lo[v];\n      let z = 0; const p = new Float32Array(V); for (let v = 0; v < V; v++) { p[v] = Math.exp(lo[v] - mx); z += p[v]; }\n      const top = Array.from(p.keys()).sort((a, b) => p[b] - p[a]).slice(0, 5).map(v => [voc.chars[v], p[v] / z]);\n      preds.push(top);\n    }\n    postMessage({ type: 'inspect', chars: ids.map(i => voc.chars[i]), T, H, d: d2, A: C.layers.map(c => c.A), stream: C.stream.concat([{ name: '最终 LayerNorm 之后', x: C.lnf.Y }]), preds });\n  }\n};\n// WORKER END\n";
+// APP START
+const $ = id => document.getElementById(id);
+const fmt = n => Math.round(n).toLocaleString('en-US');
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const YOURS = { V: 8182, d: 384, H: 6, L: 6, T: 256, B: 64 };
+const S = { L: 2, H: 4, d: 48, T: 32, B: 8, lr: 0.003, data: 'demo', running: false, V: 0, sel: 'qkv', pts: [], vals: [], g: null, ins: null, aL: 0, aH: 0, aPos: -1, cfg: null };
+const DEMO = makeCorpus(1500, 7);
+
+// ---------- 一、结构图 ----------
+const sh = (c, f) => f(c, c.d / c.H, 4 * c.d);
+const COMP = [
+  { id: 'input', g: 'io', nm: '输入的字', out: c => `[${c.B}, ${c.T}]`, p: () => 0, pf: '0',
+    what: '每个字先换成编号，就是它在词表里排第几。训练时一次喂 B 段文字，每段 T 个字，所以输入是一张 B 行 T 列的整数表。', ana: '像查字典先找到页码，后面全靠页码查东西。' },
+  { id: 'tok', g: 'emb', nm: '字表 embedding', out: c => `[${c.B}, ${c.T}, ${c.d}]`, p: c => c.V * c.d, pf: 'V × d',
+    what: '一张 V 行 d 列的表，每个字占一行。用编号查表，把每个字换成 d 个数。这些数一开始是随机的，训练中慢慢变成"字的意思"：意思相近的字，这串数也相近。查表本身没有计算。', ana: '你的模型里每个字是 384 个数，这就是 hidden_size。' },
+  { id: 'pos', g: 'emb', nm: '位置表', out: c => `[${c.B}, ${c.T}, ${c.d}]`, p: c => c.T * c.d, pf: 'T × d',
+    what: '每个位置（第 1 个字、第 2 个字……）也有一行 d 个数，直接加到字的向量上。没有它，模型分不清"明月"和"月明"，也数不出这一句写到第几个字。', ana: '你把 block 从 128 改成 256，多出来的 49,152 个参数全在这张表里。' },
+  { blockStart: true },
+  { id: 'ln1', g: 'attn', nm: 'LayerNorm 1', out: c => `[${c.B}, ${c.T}, ${c.d}]`, p: c => 2 * c.d, pf: '2 × d',
+    what: '把每个字的 d 个数调成平均 0、波动 1 左右，再乘一组可学的缩放、加一组偏移。作用是让数值稳定，层叠多了也不会越来越大。', ana: '每个字各调各的，不跨字。' },
+  { id: 'qkv', g: 'attn', nm: 'Q、K、V 三个矩阵', out: c => `[${c.B}, ${c.T}, ${3 * c.d}]`, p: c => c.d * 3 * c.d + 3 * c.d, pf: 'd × 3d + 3d',
+    what: '一个线性层，d 个数进、3d 个数出，切成三串：Q（我想找什么样的字）、K（我是什么样的字）、V（被选中时我交出去的信息）。', ana: '像图书馆：Q 是你的检索词，K 是每本书的标签，V 是书的内容。' },
+  { id: 'score', g: 'attn', nm: '打分 + softmax（每个头分开）', out: c => `[${c.B}, ${c.H}, ${c.T}, ${c.T}]`, p: () => 0, pf: '0（没有参数）',
+    what: '把 d 个数切成 H 份，每份 d/H 个，一份就是一个头。每个字用自己的 Q 和前面每个字的 K 做点积得到分数，除以 √(d/H)，把后面的字遮掉，再 softmax 成加起来等于 1 的权重。第三部分的热力图画的就是它。', ana: '这张表的大小是 T × T，随上下文长度平方增长。', infra: c => `这一层光这些权重就有 ${fmt(c.B * c.H * c.T * c.T)} 个数（float32 约 ${(c.B * c.H * c.T * c.T * 4 / 1048576).toFixed(c.T > 100 ? 0 : 2)} MB）。FlashAttention 就是为了不把它整张存下来。` },
+  { id: 'mix', g: 'attn', nm: '按权重取 V + 输出投影', out: c => `[${c.B}, ${c.T}, ${c.d}]`, p: c => c.d * c.d + c.d, pf: 'd × d + d',
+    what: '用上一步的权重，把前面各字的 V 加权求和。H 个头的结果拼回 d 个数，再过一个 d × d 的线性层。', ana: '注意力是唯一让字和字之间交换信息的地方。' },
+  { id: 'res1', g: 'attn', nm: '残差：加回原来那串数', out: c => `[${c.B}, ${c.T}, ${c.d}]`, p: () => 0, pf: '0',
+    what: '注意力算出来的结果是"加"到原来那串数上，不是替换它。信息一路往下传不会丢，反向传播时梯度也能顺着这条路直接流回前面的层。', ana: '第四部分能看到：每过一站，那串数只变一点点。' },
+  { id: 'ln2', g: 'mlp', nm: 'LayerNorm 2', out: c => `[${c.B}, ${c.T}, ${c.d}]`, p: c => 2 * c.d, pf: '2 × d',
+    what: '和 LayerNorm 1 一样，进 MLP 前先把数值调稳。', ana: '' },
+  { id: 'mlp1', g: 'mlp', nm: 'MLP 第 1 层 + 激活', out: c => `[${c.B}, ${c.T}, ${4 * c.d}]`, p: c => c.d * 4 * c.d + 4 * c.d, pf: 'd × 4d + 4d',
+    what: 'd 个数进、4d 个数出，再过 ReLU（你的模型用 GELU，是平滑版的 ReLU）。这 4d 个就是神经元，和你 MNIST 隐藏层是同一个东西，每个神经元看 d 个输入。', ana: '你的模型这里是 1536 个神经元，也就是 LLM 配置里的 intermediate_size。' },
+  { id: 'mlp2', g: 'mlp', nm: 'MLP 第 2 层 + 残差', out: c => `[${c.B}, ${c.T}, ${c.d}]`, p: c => 4 * c.d * c.d + c.d, pf: '4d × d + d',
+    what: '4d 个数压回 d 个，再加回残差。注意力负责字和字之间传信息；MLP 是每个字自己"想一想"，各个位置各算各的，互不相看。', ana: 'MLP 两层加起来约 8d² 个参数，注意力约 4d²，所以 MLP 是大头。' },
+  { blockEnd: true },
+  { id: 'lnf', g: 'head', nm: '最终 LayerNorm', out: c => `[${c.B}, ${c.T}, ${c.d}]`, p: c => 2 * c.d, pf: '2 × d', what: '所有块走完，最后再调一次数值。', ana: '' },
+  { id: 'head', g: 'head', nm: '输出层', out: c => `[${c.B}, ${c.T}, ${c.V}]`, p: c => c.d * c.V, pf: 'd × V',
+    what: 'd 个数进、V 个数出：给词表里每个字打一个分（logits），分越高越可能是下一个字。每个位置都会打一遍分。', ana: '',
+    infra: c => `这张分数表有 ${fmt(c.B * c.T * c.V)} 个数（float32 约 ${(c.B * c.T * c.V * 4 / 1048576).toFixed(0)} MB）。第 5 步一开始爆显存，就是生成时每个位置都算了它，其实只要最后一个位置。` },
+  { id: 'loss', g: 'io', nm: 'softmax + loss', out: () => '1 个数', p: () => 0, pf: '0',
+    what: '把分数变成概率，取"正确的下一个字"那一项的概率，取 −ln 就是这个位置的 loss，所有位置求平均。完全瞎猜时 loss = ln(V)。', ana: '生成时不算 loss，而是按概率抽一个字，接到后面再来一遍。' },
+];
+function labCfg() { return { V: S.V || 123, d: S.d, H: S.H, L: S.L, T: S.T, B: S.B }; }
+function buildStack() {
+  const st = $('stack'); st.innerHTML = '';
+  let host = st;
+  for (const c of COMP) {
+    if (c.blockStart) { const b = document.createElement('div'); b.className = 'block'; b.innerHTML = `<div class="tag"><span>Transformer 块</span><span class="mono" id="blkN">× ${S.L}（你的模型 × 6）</span></div>`; st.appendChild(b); host = b; continue; }
+    if (c.blockEnd) { host = st; continue; }
+    const b = document.createElement('button'); b.className = 'box g-' + c.g; b.dataset.id = c.id; b.setAttribute('aria-pressed', c.id === S.sel);
+    b.innerHTML = `<span class="nm">${c.nm}</span><span class="sh" data-sh="${c.id}"></span><span class="gbar"><i data-gb="${c.g}"></i></span>`;
+    b.onclick = () => { S.sel = c.id; document.querySelectorAll('.box').forEach(x => x.setAttribute('aria-pressed', x.dataset.id === c.id)); renderDetail(); };
+    host.appendChild(b);
+  }
+  renderShapes(); renderDetail();
+}
+function renderShapes() {
+  const c = labCfg();
+  for (const k of COMP) if (k.id) { const e = document.querySelector(`[data-sh="${k.id}"]`); if (e) e.textContent = k.out(c); }
+  const n = $('blkN'); if (n) n.textContent = `× ${S.L}（你的模型 × 6）`;
+}
+function renderDetail() {
+  const k = COMP.find(x => x.id === S.sel), a = labCfg(), y = YOURS;
+  const inB = k.id === 'input' || k.id === 'tok' || k.id === 'pos' || k.id === 'lnf' || k.id === 'head' || k.id === 'loss' ? 1 : null;
+  const mult = inB ? '' : '（每块）';
+  const pa = k.p(a), py = k.p(y);
+  $('detail').className = 'panel detail g-' + k.g;
+  $('detail').innerHTML = `<h3>${k.nm}</h3><p>${k.what}</p>${k.ana ? `<p class="analogy">${k.ana}</p>` : ''}
+  <div class="tablewrap"><table class="spec"><thead><tr><th></th><th>这里的小模型</th><th>你 4060 上的模型</th></tr></thead><tbody>
+  <tr><th>输出形状</th><td class="mono">${k.out(a)}</td><td class="mono">${k.out(y)}</td></tr>
+  <tr><th>参数量${mult}</th><td class="mono">${fmt(pa)}</td><td class="mono">${fmt(py)}</td></tr>
+  <tr><th>公式</th><td class="mono" colspan="2">${k.pf}</td></tr>
+  ${inB ? '' : `<tr><th>× 层数</th><td class="mono">${fmt(pa * a.L)}</td><td class="mono">${fmt(py * y.L)}</td></tr>`}
+  </tbody></table></div>
+  <p class="cap">形状里 B = batch，T = 一次看几个字，d = 每个字几个数，H = 头数，V = 词表大小。这里 B=${a.B}、T=${a.T}、d=${a.d}、H=${a.H}、V=${a.V}；你的是 B=64、T=256、d=384、H=6、V=8182。</p>
+  ${k.infra ? `<p class="analogy">Infra 视角：${k.infra(y)}</p>` : ''}`;
+}
+function renderPBars() {
+  const rows = [['这里的小模型', paramFormula(labCfg())], ['你 4060 上的模型', paramFormula(YOURS)]];
+  $('pbars').innerHTML = rows.map(([n, f]) => {
+    const seg = [['emb', f.emb], ['attn', f.attn], ['mlp', f.mlp], ['head', f.head]];
+    return `<div><div class="sbar-lab"><span>${n}</span><span class="mono">${fmt(f.total)} 个参数 · ${seg.map(s => (100 * s[1] / f.total).toFixed(0) + '%').join(' / ')}</span></div>
+    <div class="sbar">${seg.map(s => `<span style="width:${100 * s[1] / f.total}%;background:var(--${s[0]})" title="${s[0]} ${fmt(s[1])}"></span>`).join('')}</div></div>`;
+  }).join('');
+}
+function renderGBars() {
+  if (!S.g) return;
+  const mx = Math.max(S.g.emb, S.g.attn, S.g.mlp, S.g.head, 1e-9);
+  for (const k of ['emb', 'attn', 'mlp', 'head']) document.querySelectorAll(`[data-gb="${k}"]`).forEach(e => e.style.width = (100 * S.g[k] / mx).toFixed(1) + '%');
+}
+
+// ---------- 控件 ----------
+function seg(id, vals, key, onchange) {
+  const el = $(id); el.innerHTML = vals.map(v => `<button data-v="${v}" aria-pressed="${S[key] === v}">${v}</button>`).join('');
+  el.onclick = e => { const b = e.target.closest('button'); if (!b) return; S[key] = +b.dataset.v; el.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b)); onchange && onchange(); };
+}
+function syncVals() { $('vL').textContent = S.L; $('vH').textContent = S.H; $('vD').textContent = S.d; $('vT').textContent = S.T; $('vB').textContent = S.B; }
+function structChanged() {
+  if (S.d % S.H) { const okd = [24, 48, 96].find(x => x % S.H === 0 && x >= S.d) || 48; S.d = okd; seg('segD', [24, 48, 96], 'd', structChanged); }
+  syncVals(); renderShapes(); renderDetail(); renderPBars();
+  $('status').textContent = '结构改了，点「重置」用新结构从头训练。';
+}
+
+// ---------- worker ----------
+let W = null;
+function startWorker() {
+  if (W) W.terminate();
+  W = new Worker(URL.createObjectURL(new Blob([WORKER_SRC], { type: 'text/javascript' })));
+  W.onmessage = onMsg;
+}
+function text() { return S.data === 'demo' ? DEMO : ($('mytext').value || ''); }
+function reset() {
+  S.running = false; $('bRun').textContent = '开始训练';
+  S.pts = []; S.vals = []; S.g = null; $('samples').innerHTML = ''; $('gen').textContent = '';
+  const t = text();
+  if (Array.from(t).length < 500) { $('status').textContent = '贴的文字太短了，至少几百字，最好几千字以上。'; return; }
+  startWorker();
+  W.postMessage({ type: 'init', text: t, cfg: { d: S.d, H: S.H, L: S.L, T: S.T }, B: S.B, lr: S.lr, seed: 1 });
+}
+function onMsg(e) {
+  const d = e.data;
+  if (d.type === 'ready') {
+    S.V = d.V; S.cfg = d.cfg; S.trainChars = d.trainChars;
+    $('mParams').textContent = fmt(d.params); $('mStep').textContent = 0; $('mEpoch').textContent = '0'; $('mTrain').textContent = '—'; $('mVal').textContent = '—'; $('mTps').textContent = '—';
+    $('dataInfo').textContent = `训练集 ${fmt(d.trainChars)} 字，验证集 ${fmt(d.valChars)} 字，词表 ${d.V} 个字。瞎猜的 loss = ln(${d.V}) = ${Math.log(d.V).toFixed(2)}。`;
+    $('status').textContent = '模型已随机初始化。点「开始训练」，或者「走一步」慢慢看。';
+    $('ph0').textContent = `${S.B} 段 × ${S.T} 字 = ${S.B * S.T} 个位置同时猜下一个字`;
+    $('ph1').textContent = '—'; $('ph2').textContent = `给 ${fmt(d.params)} 个参数各算一个梯度`; $('ph3').textContent = `AdamW，学习率 ${S.lr.toFixed(4)}`;
+    renderShapes(); renderDetail(); renderPBars(); drawLoss();
+    if (!$('aText').value) $('aText').value = DEMO.split('\n')[0].slice(0, S.T);
+    $('aText').maxLength = S.T;
+    S.aL = Math.min(S.aL, S.L - 1); S.aH = Math.min(S.aH, S.H - 1); buildALayers();
+    inspect();
+  } else if (d.type === 'point') {
+    S.pts.push([d.step, d.loss]); if (d.val != null) S.vals.push([d.step, d.val]);
+  } else if (d.type === 'progress') {
+    $('mStep').textContent = fmt(d.step); $('mEpoch').textContent = d.epoch.toFixed(2);
+    if (d.loss != null) { $('mTrain').textContent = d.loss.toFixed(3); $('ph1').textContent = `这一步 loss = ${d.loss.toFixed(3)}`; }
+    if (d.val != null) $('mVal').textContent = d.val.toFixed(3);
+    if (d.tps) $('mTps').textContent = fmt(d.tps);
+    if (d.g) { S.g = d.g; renderGBars(); const gs = [['embedding', d.g.emb], ['注意力', d.g.attn], ['MLP', d.g.mlp], ['输出层', d.g.head]].sort((a, b) => b[1] - a[1]); $('ph2').textContent = `梯度最大的是${gs[0][0]}（${gs[0][1].toFixed(3)}）`; }
+    document.querySelectorAll('#phase div').forEach(x => x.classList.add('on'));
+    drawLoss(); statusText(d);
+  } else if (d.type === 'sample') {
+    const r = document.createElement('div'); r.innerHTML = `<span class="st">第 ${d.step} 步</span><span></span>`; r.lastChild.textContent = d.text || '（空）';
+    $('samples').prepend(r); inspect();
+  } else if (d.type === 'gen') {
+    $('gen').textContent = d.text || '（它直接换行了，再点一次）';
+  } else if (d.type === 'inspect') {
+    S.ins = d; if (S.aPos < 0 || S.aPos >= d.T) S.aPos = d.T - 1; renderInspect();
+  } else if (d.type === 'error') {
+    $('status').textContent = d.msg;
+  }
+}
+function statusText(d) {
+  const lnV = Math.log(S.V), v = d.val, t = d.loss;
+  let s;
+  if (d.step < 30) s = `刚开始，loss 接近瞎猜的 ${lnV.toFixed(2)}。`;
+  else if (v != null && S.vals.length > 6 && v > Math.min(...S.vals.map(p => p[1])) + 0.08 && t < v - 0.15) s = '验证 loss 开始回升、训练 loss 还在降：在背题了（过拟合）。这时候该早停。';
+  else if (S.data === 'demo' && t < 2.0) s = '练习语料的词块是随机拼的，loss 降到 1.8 左右就到底了：剩下的是真随机，再练也猜不出来。看看右边写的诗有没有数对字数、押上韵。';
+  else s = `loss 在降。已经过了 ${d.epoch.toFixed(1)} 遍训练集（epoch）。`;
+  $('status').textContent = s;
+}
+function drawLoss() {
+  const cv = $('cLoss'), dpr = window.devicePixelRatio || 1, w = cv.clientWidth, h = cv.clientHeight;
+  cv.width = w * dpr; cv.height = h * dpr; const g = cv.getContext('2d'); g.scale(dpr, dpr); g.clearRect(0, 0, w, h);
+  const lnV = Math.log(S.V || 100), padL = 34, padB = 20, x0 = padL, y0 = 6, W2 = w - padL - 8, H2 = h - padB - y0;
+  const maxS = Math.max(50, S.pts.length ? S.pts[S.pts.length - 1][0] : 50), top = Math.ceil(lnV + 0.5);
+  const X = s => x0 + W2 * s / maxS, Y = l => y0 + H2 * (1 - Math.min(l, top) / top);
+  g.font = '11px ' + css('--font-mono'); g.fillStyle = css('--muted'); g.strokeStyle = css('--grid'); g.lineWidth = 1;
+  for (let l = 0; l <= top; l++) { g.beginPath(); g.moveTo(x0, Y(l)); g.lineTo(x0 + W2, Y(l)); g.stroke(); g.fillText(l, 8, Y(l) + 4); }
+  g.fillText(maxS + ' 步', x0 + W2 - 44, h - 4); g.fillText('0', x0, h - 4);
+  g.setLineDash([4, 4]); g.strokeStyle = css('--muted'); g.beginPath(); g.moveTo(x0, Y(lnV)); g.lineTo(x0 + W2, Y(lnV)); g.stroke(); g.setLineDash([]);
+  const line = (pts, col, wd) => { if (!pts.length) return; g.strokeStyle = col; g.lineWidth = wd; g.beginPath(); pts.forEach((p, i) => i ? g.lineTo(X(p[0]), Y(p[1])) : g.moveTo(X(p[0]), Y(p[1]))); g.stroke(); };
+  // 训练 loss 噪声大，画滑动平均
+  const sm = []; let acc = 0; S.pts.forEach((p, i) => { acc = i ? acc * 0.9 + p[1] * 0.1 : p[1]; if (i % 2 === 0 || i === S.pts.length - 1) sm.push([p[0], acc]); });
+  line(sm, css('--ink'), 1.5); line(S.vals, css('--mlp'), 2);
+  if (S.vals.length) { const p = S.vals[S.vals.length - 1]; g.fillStyle = css('--mlp'); g.beginPath(); g.arc(X(p[0]), Y(p[1]), 3, 0, 7); g.fill(); }
+}
+
+// ---------- 三、注意力 ----------
+function buildALayers() {
+  const el = $('segAL'); el.innerHTML = Array.from({ length: S.cfg ? S.cfg.L : S.L }, (_, i) => `<button data-v="${i}" aria-pressed="${i === S.aL}">第 ${i + 1} 层</button>`).join('');
+  el.onclick = e => { const b = e.target.closest('button'); if (!b) return; S.aL = +b.dataset.v; el.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b)); renderInspect(); };
+}
+function inspect() { if (W && S.cfg) W.postMessage({ type: 'inspect', text: $('aText').value }); }
+function heat(cv, A, T, h, H, labels, sel) {
+  const dpr = window.devicePixelRatio || 1, w = cv.clientWidth; cv.width = w * dpr; cv.height = w * dpr;
+  const g = cv.getContext('2d'); g.scale(dpr, dpr); g.clearRect(0, 0, w, w);
+  const lab = labels ? Math.min(22, w * 0.07) : 0, cell = (w - lab) / T, base = h * T * T;
+  const col = css('--attn'), grid = css('--grid');
+  g.fillStyle = grid; g.globalAlpha = 0.35; g.fillRect(lab, lab, w - lab, w - lab); g.globalAlpha = 1;
+  for (let t = 0; t < T; t++) for (let u = 0; u <= t; u++) {
+    const a = A[base + t * T + u]; g.fillStyle = col; g.globalAlpha = Math.min(1, 0.06 + a * 1.4);
+    g.fillRect(lab + u * cell, lab + t * cell, Math.max(1, cell - (cell > 6 ? 1 : 0)), Math.max(1, cell - (cell > 6 ? 1 : 0)));
+  }
+  g.globalAlpha = 1;
+  if (labels) {
+    g.fillStyle = css('--ink'); g.font = `${Math.min(14, cell * 0.8)}px ${css('--font-display')}`; g.textAlign = 'center'; g.textBaseline = 'middle';
+    for (let t = 0; t < T; t++) { g.fillText(labels[t], lab / 2, lab + (t + 0.5) * cell); g.fillText(labels[t], lab + (t + 0.5) * cell, lab / 2); }
+    if (sel >= 0) { g.strokeStyle = css('--ink'); g.lineWidth = 2; g.strokeRect(lab, lab + sel * cell, (sel + 1) * cell, cell); }
+  }
+  return { lab, cell };
+}
+function renderInspect() {
+  const d = S.ins; if (!d) return;
+  const A = d.A[Math.min(S.aL, d.A.length - 1)], H = d.H; S.aH = Math.min(S.aH, H - 1);
+  $('aTitle').textContent = `第 ${S.aL + 1} 层 · 第 ${S.aH + 1} 个头`;
+  S.geo = heat($('cAttn'), A, d.T, S.aH, H, d.chars, S.aPos);
+  $('heads').innerHTML = Array.from({ length: H }, (_, h) => `<button data-h="${h}" aria-pressed="${h === S.aH}"><canvas></canvas>第 ${h + 1} 个头</button>`).join('');
+  $('heads').querySelectorAll('button').forEach(b => { heat(b.querySelector('canvas'), A, d.T, +b.dataset.h, H, null, -1); b.onclick = () => { S.aH = +b.dataset.h; renderInspect(); }; });
+  $('aChars').innerHTML = d.chars.map((c, i) => `<button data-i="${i}" aria-pressed="${i === S.aPos}">${c === '\n' ? '↵' : c}</button>`).join('');
+  $('aChars').onclick = e => { const b = e.target.closest('button'); if (!b) return; S.aPos = +b.dataset.i; renderInspect(); };
+  const t = S.aPos, base = S.aH * d.T * d.T, rows = [];
+  for (let u = 0; u <= t; u++) rows.push([u, A[base + t * d.T + u]]);
+  rows.sort((a, b) => b[1] - a[1]);
+  $('who').innerHTML = rows.slice(0, 6).map(([u, a]) => `<div class="r"><span class="ch">${d.chars[u]}</span><span class="b" style="width:${(a * 100).toFixed(1)}%"></span><span class="pc">${(a * 100).toFixed(0)}%</span></div>`).join('') + (rows.length > 6 ? `<p class="cap">还有 ${rows.length - 6} 个字分到剩下的权重。第 ${t + 1} 个字「${d.chars[t]}」只能看前 ${t + 1} 个字。</p>` : `<p class="cap">第 ${t + 1} 个字「${d.chars[t]}」只能看前 ${t + 1} 个字。</p>`);
+  $('pred').innerHTML = d.preds[t].map(([c, p]) => `<div class="r pred"><span class="ch">${c === '\n' ? '↵' : c}</span><span class="b" style="width:${(p * 100).toFixed(1)}%"></span><span class="pc">${(p * 100).toFixed(0)}%</span></div>`).join('') + (t + 1 < d.T ? `<p class="cap">句子里实际的下一个字是「${d.chars[t + 1]}」。</p>` : '');
+  renderStream();
+}
+function renderStream() {
+  const d = S.ins; if (!d) return;
+  const cv = $('cStream'), dpr = window.devicePixelRatio || 1, w = cv.clientWidth, rows = d.stream.length, labW = Math.min(150, w * 0.32), rh = 22, h = rows * rh + 4;
+  cv.style.height = h + 'px'; cv.width = w * dpr; cv.height = h * dpr; const g = cv.getContext('2d'); g.scale(dpr, dpr); g.clearRect(0, 0, w, h);
+  const dd = d.d, cw = (w - labW) / dd, t = S.aPos; let mx = 1e-6;
+  for (const s of d.stream) for (let j = 0; j < dd; j++) mx = Math.max(mx, Math.abs(s.x[t * dd + j]));
+  g.font = '12px ' + css('--font-body'); g.textBaseline = 'middle';
+  const pos = css('--pos'), neg = css('--neg');
+  d.stream.forEach((s, r) => {
+    g.fillStyle = css('--muted'); g.globalAlpha = 1; g.fillText(s.name, 0, r * rh + rh / 2);
+    for (let j = 0; j < dd; j++) { const v = s.x[t * dd + j]; g.fillStyle = v >= 0 ? pos : neg; g.globalAlpha = Math.min(1, Math.abs(v) / mx * 1.6); g.fillRect(labW + j * cw, r * rh + 2, Math.max(1, cw - 0.5), rh - 4); }
+  });
+  g.globalAlpha = 1;
+  $('streamCap').textContent = `第 ${t + 1} 个字「${d.chars[t]}」的 ${dd} 个数。最后一行乘上输出层，就得到它对下一个字的打分。`;
+}
+
+// ---------- 启动 ----------
+seg('segL', [1, 2, 3, 4], 'L', structChanged); seg('segH', [1, 2, 4], 'H', structChanged); seg('segD', [24, 48, 96], 'd', structChanged);
+seg('segT', [16, 32, 48], 'T', structChanged); seg('segB', [4, 8, 16, 32], 'B', () => { syncVals(); renderShapes(); renderDetail(); W && W.postMessage({ type: 'set', B: S.B }); });
+$('lr').oninput = e => { S.lr = Math.pow(10, +e.target.value); $('vLR').textContent = S.lr.toFixed(4); W && W.postMessage({ type: 'set', lr: S.lr }); };
+$('vLR').textContent = S.lr.toFixed(4);
+$('segData').onclick = e => { const b = e.target.closest('button'); if (!b) return; S.data = b.dataset.v; $('segData').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b)); $('mytext').hidden = S.data !== 'mine'; $('status').textContent = S.data === 'mine' ? '把文字贴进框里，再点「重置」。' : '点「重置」换回练习语料。'; };
+$('bRun').onclick = () => { if (!W) return; S.running = !S.running; $('bRun').textContent = S.running ? '暂停' : '继续训练'; W.postMessage({ type: 'run', on: S.running }); if (!S.running) inspect(); };
+$('bStep').onclick = () => { if (!W) return; S.running = false; $('bRun').textContent = '继续训练'; W.postMessage({ type: 'step' }); setTimeout(inspect, 60); };
+$('bReset').onclick = reset;
+$('temp').oninput = e => $('vTemp').textContent = (+e.target.value).toFixed(2);
+$('bGen').onclick = () => W && W.postMessage({ type: 'gen', prefix: $('prefix').value, temp: +$('temp').value });
+$('bInspect').onclick = inspect;
+$('aText').onkeydown = e => { if (e.key === 'Enter') inspect(); };
+$('cAttn').onclick = e => { if (!S.ins || !S.geo) return; const r = e.target.getBoundingClientRect(), y = e.clientY - r.top - S.geo.lab, i = Math.floor(y / S.geo.cell); if (i >= 0 && i < S.ins.T) { S.aPos = i; renderInspect(); } };
+let rz; window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { drawLoss(); renderInspect(); }, 150); });
+syncVals(); buildStack(); renderPBars(); reset();
+// APP END
+</script>
+</html>

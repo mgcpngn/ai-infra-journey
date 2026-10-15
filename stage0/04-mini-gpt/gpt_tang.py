@@ -25,6 +25,7 @@ parser.add_argument("--dropout", type=float, default=0.1, help="训练时随机�
 parser.add_argument("--batch-size", type=int, default=64, help="每步同时看多少段文本")
 parser.add_argument("--steps", type=int, default=5000, help="训练步数")
 parser.add_argument("--lr", type=float, default=1e-3, help="最大学习率")
+parser.add_argument("--compile", action="store_true", help="用 torch.compile 合并小算子，训练约快 1.5 倍（首次编译要 10~20 秒）")
 parser.add_argument("--temperature", type=float, default=0.8, help="采样温度：<1 更保守，>1 更随机")
 args = parser.parse_args()
 assert args.n_embd % args.n_head == 0, "n_embd 必须能被 n_head 整除"
@@ -149,6 +150,9 @@ class GPT(nn.Module):
 
 
 model = GPT().to(device)
+# 训练用 train_model；评估、生成、保存仍用原来的 model（两者共用同一份参数）
+# 这样保存的权重名字不变，infer_tang.py 照常能加载
+train_model = torch.compile(model) if args.compile else model
 
 
 # ---------- 4. 参数量 ----------
@@ -201,7 +205,7 @@ for step in range(1, args.steps + 1):
     # bf16 混合精度：矩阵乘法用 16 位算（快、省显存），参数和梯度仍是 32 位（精度不丢）
     # bf16 指数位和 float32 一样多，不会溢出，所以不需要 GradScaler
     with torch.autocast("cuda", dtype=torch.bfloat16):
-        _, loss = model(*get_batch("train"))
+        _, loss = train_model(*get_batch("train"))
     optimizer.zero_grad(set_to_none=True)
     loss.backward()
     torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)  # 梯度太大时按比例缩小，防止偶发的一步把模型带崩

@@ -61,3 +61,12 @@ loss 从来不知道正确的 w、b，只知道每条数据的正确答案 y。�
 | 前向 | w·x + b | 几十层矩阵乘法（GEMM） |
 | loss | 均方误差 | 交叉熵 |
 | 梯度与更新 | 手推或 backward() | backward() + 优化器 |
+
+## 代码导读：[linear_fit.py](linear_fit.py)
+
+| 位置 | 做什么 |
+| --- | --- |
+| `train_manual` | 手写四步：前向 `w*x+b` → MSE loss → 手推梯度 `mean(2·err·x)`、`mean(2·err)` → `w -= lr*grad` |
+| `train_autograd` | 同样四步，梯度交给 `loss.backward()`；每步要 `grad.zero_()`，因为 PyTorch 的梯度默认累加 |
+| 第 5 段 | 断言两种方法每一步结果一致：`backward()` 算的就是手推的那个梯度 |
+| 全程 float64 | lr=1.5 发散时数值会大到 float32 溢出 |

@@ -50,12 +50,24 @@
 ## 仓库结构
 
 ```
-stage0/          第 0 阶段每一步：提示词、代码、笔记
+stage0/          第 0 阶段每一步：提示词（prompt.md）、本机 Claude Code 写的代码（*.py）、笔记（notes.md）
 labs/            互动演示页（浏览器直接打开）
 glossary.md      术语表
 journal/         按日期的学习日志：关键领悟和被纠正的误解
 
 ```
+
+### 第 0 阶段的代码
+
+都是本机 Claude Code 按 prompt.md 写的，在 RTX 4060 Laptop（WSL）上跑通。数据和训练好的模型不进仓库。
+
+| 步 | 代码 | 一句话 |
+| --- | --- | --- |
+| 1 | [linear_fit.py](stage0/01-linear-fit/linear_fit.py) | 手推梯度和 `backward()` 各训练一遍 y = 3x + 2，证明两者一样 |
+| 2 | [mnist_mlp.py](stage0/02-mnist-mlp/mnist_mlp.py) | 784 → hidden → 10 识别手写数字，可去掉 ReLU、改宽度，测训练和推理耗时 |
+| 3 | [bigram_tang.py](stage0/03-bigram/bigram_tang.py) | 下载全唐诗；一张 8182×8182 的表，只看前一个字猜下一个字 |
+| 4 | [gpt_tang.py](stage0/04-mini-gpt/gpt_tang.py) | 从零写的 6 层小 GPT，训练、生成、测速，存 checkpoint |
+| 5 | [infer_tang.py](stage0/05-inference-opt/infer_tang.py) | 给小 GPT 加 KV cache，测 prefill/decode、显存、batching、int8/fp8 |
 
 ## 术语表
 

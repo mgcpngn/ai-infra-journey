@@ -105,30 +105,30 @@
 
 ---
 
-## 三、走向 LLM ⏳
+## 三、走向 LLM
 
-### token、tokenizer、词表（vocabulary）
+### token、tokenizer、词表（vocabulary） ✅
 - **token**：模型处理文字的最小单位，可能是一个字、半个词或一个词。
 - **tokenizer**：把文字切成 token、再换成编号的工具。
 - **词表**：所有 token 的清单。Qwen3 约 15 万个。
 
-### embedding
+### embedding ✅
 - **是什么**：一张大表，每个 token 编号对应一行数（Qwen3-8B 是 4096 个）。输入时查表，把编号换成向量。没有计算，只是查表。
 
-### Transformer 块
+### Transformer 块 ✅
 - **是什么**：LLM 中间每一层的结构，包含两部分：注意力 + MLP。Qwen3-8B 叠了 36 个。
 
-### 注意力（attention）
-- **是什么**：让每个 token 去"看"前面所有 token，决定从哪些 token 那里取信息。这是 LLM 最核心的新东西，第 4 步会亲手搭。
+### 注意力（attention） ✅
+- **是什么**：让每个 token 去"看"前面所有 token，决定从哪些 token 那里取信息。这是 LLM 最核心的新东西，第 4 步亲手搭过：有了它，模型能数出一句写了几个字，五言七言就对了。
 
-### MLP、FFN
+### MLP、FFN ✅
 - **是什么**：线性 → 激活 → 线性，就是你的 MNIST 网络。在 Transformer 里也叫前馈网络（FFN）。
 - **Infra 要点**：约占 LLM 参数的三分之二，也是推理时最大的矩阵乘法。
 
-### LM head（输出层）
+### LM head（输出层） ✅
 - **是什么**：把最后一层的向量变成词表里每个词的分数，再 softmax。就是一个 15 万类的分类器。
 
-### 自回归生成（autoregressive）
+### 自回归生成（autoregressive） ✅
 - **是什么**：一次只生成一个 token，把它接到输入后面，再生成下一个，循环下去。
 
 ### 预训练、微调、LoRA、对齐、DPO

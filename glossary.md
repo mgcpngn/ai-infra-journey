@@ -122,7 +122,8 @@
 ### embedding ✅
 - **是什么**：一张大表，每个 token 编号对应一行数（Qwen3-8B 是 4096 个）。输入时查表，把编号换成向量。没有计算，只是查表。
 
-### Transformer 块 ✅
+### Transformer 层（Transformer block）✅
+- **统一叫法**：本仓库只说"层"。英文 block 和"块"都指它；配置里是 n_layer / num_hidden_layers。
 - **是什么**：LLM 中间每一层的结构，包含两部分：注意力 + MLP。Qwen3-8B 叠了 36 个。
 
 ### 注意力（attention） ✅

@@ -31,8 +31,8 @@
 | 2 | [两层神经网络识别手写数字](stage0/02-mnist-mlp/) | 多层、激活函数、反向传播 | 每一层都是矩阵乘（GEMM），推理最主要的算子 | ✅ 已过关 |
 | 3 | [唐诗 bigram 语言模型](stage0/03-bigram/) | token、预测下一个字、softmax、采样 | 一次只出一个 token，这就是 decode 循环 | ✅ 已过关 |
 | 4 | [小 GPT（约 1700 万参数）](stage0/04-mini-gpt/) | 自注意力、为什么能看长上下文 | attention 显存随长度平方增长，FlashAttention 要解决的问题 | ✅ 已过关 |
-| 5 | [给自己的模型做推理优化](stage0/05-inference-opt/) | KV cache、prefill/decode、batch、量化 | TTFT、TPOT、吞吐的来源 | 🔄 进行中 |
-| 6 | LoRA 微调 Qwen3-0.6B | 预训练、全量微调、LoRA | 客户常要部署微调模型，vLLM 可挂 LoRA | ⏳ |
+| 5 | [给自己的模型做推理优化](stage0/05-inference-opt/) | KV cache、prefill/decode、batch、量化 | TTFT、TPOT、吞吐的来源 | ✅ |
+| 6 | [LoRA 微调 Qwen3-0.6B](stage0/06-lora/) | 预训练、全量微调、LoRA | 客户常要部署微调模型，vLLM 可挂 LoRA | 🔄 进行中 |
 | 7 | DPO 对齐 | SFT、RLHF、DPO、GRPO | 推理模型的长思考链，decode 占大头的来源 | ⏳ |
 
 ### 第 1 月：一张推理全景图 + 会读指标

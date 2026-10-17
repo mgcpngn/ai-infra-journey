@@ -2,7 +2,7 @@
 
 状态：🔄 等多样性小实验 + 5 道检查题
 
-提示词：[prompt.md](prompt.md)　结果：[results.md](results.md)
+提示词：[prompt.md](prompt.md)　结果：[results.md](results.md)　代码：[lora_poem.py](lora_poem.py)（实验 0–4）、[lora_seeds.py](lora_seeds.py)（多样性小实验）
 
 ## 预测和结果
 - 预测全量微调会 OOM → 错。纯 bf16 跑通了（5.60 GB），但这是约 8 字节/参数、会损失精度的做法；正常的 16 字节/参数要 8.88 GB，放不下。

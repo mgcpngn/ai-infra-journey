@@ -1,6 +1,6 @@
 # 第 6 步笔记：LoRA 微调 Qwen3-0.6B
 
-状态：🔄 等多样性小实验 + 5 道检查题
+状态：✅（10-18 收尾。推理要记住的一句：一个基础模型可以挂很多个小 LoRA 文件，8.78 MB 对 1137 MB。检查题第 2、3 题涉及的训练细节放进暂存区。）
 
 提示词：[prompt.md](prompt.md)　结果：[results.md](results.md)　代码：[lora_poem.py](lora_poem.py)（实验 0–4）、[lora_seeds.py](lora_seeds.py)（多样性小实验）
 

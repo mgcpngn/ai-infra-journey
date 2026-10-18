@@ -1,0 +1,402 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>碗里的小球</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* 布局：一列。上面是碗（画布），下面是控制条，再下面是要做的几件事。 */
+:root {
+  --bg: #f6f7f4;
+  --panel: #ffffff;
+  --fg: #1d2420;
+  --muted: #5f6b64;
+  --line: #d9ded9;
+  --bowl: #2f6d5a;
+  --ball: #d0632b;
+  --target: #2f6d5a;
+  --arrow: #3a5fa8;
+  --font: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141917; --panel: #1c2320; --fg: #e6ebe7; --muted: #9aa6a0; --line: #33403a;
+    --bowl: #6fbfa5; --ball: #f08a52; --target: #6fbfa5; --arrow: #8fb0f0; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141917; --panel: #1c2320; --fg: #e6ebe7; --muted: #9aa6a0; --line: #33403a;
+  --bowl: #6fbfa5; --ball: #f08a52; --target: #6fbfa5; --arrow: #8fb0f0; color-scheme: dark;
+}
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--font); font-size: 16px; line-height: 1.7;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 24px 48px;
+}
+.wrap { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+h1 { font-size: 26px; margin: 0; text-wrap: balance; }
+.lead { margin: 0; color: var(--muted); }
+.stage { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+canvas { width: 100%; height: auto; display: block; }
+.status { display: flex; flex-wrap: wrap; gap: 8px 20px; font-size: 15px; color: var(--muted); padding: 4px 4px 0; }
+.status b { color: var(--fg); font-variant-numeric: tabular-nums; }
+.msg { min-height: 1.7em; color: var(--ball); font-weight: 600; padding: 0 4px; }
+.controls { display: flex; flex-direction: column; gap: 12px; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.label { font-weight: 600; margin-right: 4px; }
+button {
+  font: inherit; font-size: 15px; padding: 8px 14px; border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--panel); color: var(--fg);
+}
+button:focus-visible { outline: 3px solid var(--arrow); outline-offset: 2px; }
+button.size[aria-pressed="true"], button.shape[aria-pressed="true"], button.mode[aria-pressed="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+button.go { background: var(--ball); color: #fff; border-color: var(--ball); font-weight: 600; padding: 10px 22px; }
+.tasks { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 20px; }
+.tasks h2 { font-size: 18px; margin: 0 0 8px; }
+.tasks ol { margin: 0; padding-left: 1.4em; display: flex; flex-direction: column; gap: 10px; }
+.tasks li span { color: var(--muted); }
+details { color: var(--muted); }
+details summary { cursor: pointer; color: var(--fg); font-weight: 600; }
+details p { margin: 8px 0 0; }
+h2.part { font-size: 22px; margin: 24px 0 0; padding-top: 20px; border-top: 1px solid var(--line); }
+</style>
+</head><body>
+
+<div class="wrap">
+  <h1>碗里的小球</h1>
+  <p class="lead">小球想滚到碗底（绿色的旗子）。每点一次「走一步」，它就朝下坡的方向走一步。你只需要选步子大小，然后看它怎么走。不用算任何数。</p>
+
+  <div class="stage">
+    <canvas id="cv" width="720" height="380" aria-label="碗和小球"></canvas>
+    <div class="status">
+      <div>已经走了 <b id="steps">0</b> 步</div>
+      <div>离碗底还差 <b id="dist">很远</b></div>
+    </div>
+    <div class="msg" id="msg" role="status"></div>
+  </div>
+
+  <div class="controls">
+    <div class="row" role="group" aria-label="碗的样子">
+      <span class="label">碗的样子：</span>
+      <button class="shape" id="b1" data-bumpy="0" aria-pressed="true">规则的碗</button>
+      <button class="shape" id="b2" data-bumpy="1" aria-pressed="false">坑坑洼洼的碗</button>
+    </div>
+    <div class="row" role="group" aria-label="步子大小">
+      <span class="label">步子大小：</span>
+      <button class="size" id="s1" data-lr="0.01">很小</button>
+      <button class="size" id="s2" data-lr="0.1" aria-pressed="true">小</button>
+      <button class="size" id="s3" data-lr="0.5">中</button>
+      <button class="size" id="s4" data-lr="1.0">大</button>
+      <button class="size" id="s5" data-lr="1.1">更大</button>
+    </div>
+    <div class="row">
+      <button class="go" id="go">走一步</button>
+      <button id="go5">连走 5 步</button>
+      <button id="reset">放回起点</button>
+    </div>
+  </div>
+
+  <div class="tasks">
+    <h2>请做这几件事</h2>
+    <ol>
+      <li>选「小」，点 5 次「走一步」。<span>看蓝色箭头：越靠近碗底，箭头变长还是变短？小球每步走的距离呢？</span></li>
+      <li>放回起点，选「很小」，点 5 次。<span>和「小」比，哪个先到碗底？</span></li>
+      <li>放回起点，<b>先猜</b>：选「大」会最快到碗底吗？然后点 5 次看看。</li>
+      <li>放回起点，选「更大」，点 5 次。<span>发生了什么？</span></li>
+      <li>换成「坑坑洼洼的碗」，选「小」，连走几次。<span>小球停在哪里？那里是最低的地方吗？</span></li>
+      <li>还是坑坑洼洼的碗，<b>先猜</b>：换成「中」，小球能离开那个小坑吗？然后试试。</li>
+    </ol>
+    <p style="margin:12px 0 0">做完用你自己的话告诉我：蓝色箭头告诉小球什么？步子大小又决定了什么？</p>
+  </div>
+
+  <details>
+    <summary>这些东西叫什么（第一个玩法做完再点开）</summary>
+    <p>小球的位置 = 一个<b>参数</b>。小球的高度 = <b>loss</b>，越低越好。蓝色箭头 = <b>梯度</b>：哪边是下坡、坡有多陡。步子大小 = <b>学习率</b>。点一次「走一步」= 训练一<b>步</b>。</p>
+    <p>真模型的碗是坑坑洼洼的，而且不是一根线，是 5.96 亿个方向一起的形状，画不出来。</p>
+    <p>你训练 Qwen 时，5.96 亿个参数每一步都在做同一件事：各自朝自己的下坡走一步。</p>
+  </details>
+
+  <h2 class="part">第二个玩法：刻度尺</h2>
+  <p class="lead">小球只能停在刻度上。刻度粗，就像一把只有厘米、没有毫米的尺子。每走一步，小球会被放到最近的刻度上。为了让你看得见，这里的粗刻度比真的画粗了很多倍。步子大小固定为「小」。</p>
+
+  <div class="stage">
+    <canvas id="cv2" width="720" height="380" aria-label="带刻度的碗"></canvas>
+    <div class="status">
+      <div>已经走了 <b id="steps2">0</b> 步</div>
+      <div>离碗底还差 <b id="dist2">很远</b></div>
+    </div>
+    <div class="msg" id="msg2" role="status"></div>
+  </div>
+
+  <div class="controls">
+    <div class="row" role="group" aria-label="刻度">
+      <span class="label">刻度：</span>
+      <button class="mode" id="m1" data-mode="fine" aria-pressed="true">细刻度</button>
+      <button class="mode" id="m2" data-mode="coarse" aria-pressed="false">粗刻度</button>
+      <button class="mode" id="m3" data-mode="mixed" aria-pressed="false">粗刻度 + 细刻度小本子</button>
+    </div>
+    <div class="row">
+      <button class="go" id="go2">走一步</button>
+      <button id="go25">连走 5 步</button>
+      <button id="reset2">放回起点</button>
+    </div>
+  </div>
+
+  <div class="tasks">
+    <h2>请做这 3 件事</h2>
+    <ol>
+      <li>选「细刻度」，连走几次。<span>小球能到碗底吗？</span></li>
+      <li>放回起点，选「粗刻度」，连走几次。<span>小球停在哪里？为什么停住了？提示：看越靠近碗底，每一步本来想走多远，和刻度之间的距离比一比。</span></li>
+      <li>放回起点，<b>先猜</b>：选「粗刻度 + 细刻度小本子」，小球能到碗底吗？然后连走几次。<span>空心的圈就是小本子上记的位置。</span></li>
+    </ol>
+    <p style="margin:12px 0 0">做完用你自己的话告诉我：那个「小本子」起了什么作用？</p>
+  </div>
+
+  <details>
+    <summary>这些东西叫什么（第二个玩法做完再点开）</summary>
+    <p>粗刻度 = <b>bf16</b>，每个数 2 字节，省显存、算得快，但刻度粗。细刻度 = <b>fp32</b>，每个数 4 字节，刻度细。</p>
+    <p>「粗刻度 + 细刻度小本子」就是全量微调的常见做法：拿 bf16 那份参数去算，另外存一份 fp32 的参数当小本子，每一步的小改动都记在小本子上，不会丢。这就是 16 字节里那「4 字节 fp32 参数」。</p>
+  </details>
+
+</div>
+
+<script>
+(function () {
+  var cv = document.getElementById("cv"), ctx = cv.getContext("2d");
+  var START = 0.5, TARGET = 2, XMIN = -2.5, XMAX = 6.5, YMAX = 18;
+  var w = START, lr = 0.1, steps = 0, trail = [START], anim = null, out = false;
+  var stepsEl = document.getElementById("steps"), distEl = document.getElementById("dist"), msg = document.getElementById("msg");
+
+  function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+  var bumpy = false;
+  function loss(x) { var u = x - TARGET; return bumpy ? 0.5 * u * u + 1.2 * (1 - Math.cos(2.5 * u)) : u * u; }
+  function slope(x) { var u = x - TARGET; return bumpy ? u + 3 * Math.sin(2.5 * u) : 2 * u; }
+
+  function size() {
+    var r = cv.getBoundingClientRect(), d = window.devicePixelRatio || 1;
+    var W = Math.max(280, r.width), H = Math.round(W * 0.53);
+    cv.width = W * d; cv.height = H * d; cv.style.height = H + "px";
+    ctx.setTransform(d, 0, 0, d, 0, 0);
+    draw(w);
+  }
+  function geo() {
+    var W = cv.width / (window.devicePixelRatio || 1), H = cv.height / (window.devicePixelRatio || 1);
+    var pad = 24, top = 20, bot = 30;
+    return {
+      W: W, H: H,
+      X: function (x) { return pad + (x - XMIN) / (XMAX - XMIN) * (W - 2 * pad); },
+      Y: function (y) { return top + (1 - Math.min(y, YMAX) / YMAX) * (H - top - bot); }
+    };
+  }
+
+  function draw(pos) {
+    var g = geo(), bowl = css("--bowl"), ball = css("--ball"), arrow = css("--arrow"), muted = css("--muted"), line = css("--line");
+    ctx.clearRect(0, 0, g.W, g.H);
+    // 碗
+    ctx.beginPath();
+    for (var i = 0; i <= 200; i++) {
+      var x = XMIN + (XMAX - XMIN) * i / 200;
+      var px = g.X(x), py = g.Y(loss(x));
+      i ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+    }
+    ctx.strokeStyle = bowl; ctx.lineWidth = 3; ctx.stroke();
+    // 碗底的旗子
+    var fx = g.X(TARGET), fy = g.Y(0);
+    ctx.strokeStyle = css("--target"); ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(fx, fy); ctx.lineTo(fx, fy - 34); ctx.stroke();
+    ctx.fillStyle = css("--target");
+    ctx.beginPath(); ctx.moveTo(fx, fy - 34); ctx.lineTo(fx + 16, fy - 28); ctx.lineTo(fx, fy - 22); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = muted; ctx.font = "13px " + css("--font"); ctx.textAlign = "center";
+    ctx.fillText("碗底", fx, g.H - 8);
+    // 走过的路
+    for (var k = 1; k < trail.length; k++) {
+      var a = trail[k - 1], b = trail[k];
+      var ax = g.X(a), ay = g.Y(loss(a)), bx = g.X(b), by = g.Y(loss(b));
+      var mx = (ax + bx) / 2, my = Math.min(ay, by) - 30 - Math.abs(bx - ax) * 0.15;
+      ctx.beginPath(); ctx.moveTo(ax, ay); ctx.quadraticCurveTo(mx, my, bx, by);
+      ctx.setLineDash([4, 4]); ctx.strokeStyle = muted; ctx.lineWidth = 1.5; ctx.stroke(); ctx.setLineDash([]);
+    }
+    for (var j = 0; j < trail.length - 1; j++) {
+      var t = trail[j];
+      ctx.beginPath(); ctx.arc(g.X(t), g.Y(loss(t)), 4, 0, Math.PI * 2);
+      ctx.fillStyle = line; ctx.fill();
+    }
+    if (out) return;
+    // 小球
+    var bx0 = g.X(pos), by0 = g.Y(loss(pos));
+    ctx.beginPath(); ctx.arc(bx0, by0 - 9, 9, 0, Math.PI * 2);
+    ctx.fillStyle = ball; ctx.fill();
+    // 下坡箭头：方向 = 下坡，长度 = 坡有多陡
+    var s = -slope(pos), len = Math.max(-160, Math.min(160, s * 18));
+    if (Math.abs(len) > 3) {
+      var ay0 = by0 + 18;
+      ctx.strokeStyle = arrow; ctx.fillStyle = arrow; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(bx0, ay0); ctx.lineTo(bx0 + len, ay0); ctx.stroke();
+      var dir = len > 0 ? 1 : -1;
+      ctx.beginPath(); ctx.moveTo(bx0 + len + dir * 8, ay0); ctx.lineTo(bx0 + len - dir * 2, ay0 - 6); ctx.lineTo(bx0 + len - dir * 2, ay0 + 6); ctx.closePath(); ctx.fill();
+      ctx.font = "13px " + css("--font"); ctx.textAlign = dir > 0 ? "left" : "right";
+      ctx.fillText("下坡方向", bx0 + len + dir * 12, ay0 + 5);
+    }
+  }
+
+  function describe() {
+    stepsEl.textContent = steps;
+    var d = Math.abs(w - TARGET);
+    distEl.textContent = out ? "飞出碗外了" : d < 0.01 ? "到了" : d < 0.2 ? "很近" : d < 1 ? "不远" : "很远";
+  }
+
+  function step(done) {
+    if (anim || out) { done && done(); return; }
+    var from = w, to = w - lr * slope(w);
+    steps++;
+    if (to < XMIN || to > XMAX) {
+      w = to; out = true; trail.push(Math.max(XMIN, Math.min(XMAX, to)));
+      msg.textContent = "步子太大，小球每一步都跳得比上一步更远，飞出碗外了。";
+      draw(w); describe(); done && done(); return;
+    }
+    var t0 = null;
+    anim = requestAnimationFrame(function tick(t) {
+      if (t0 === null) t0 = t;
+      var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      var p = reduce ? 1 : Math.min(1, (t - t0) / 420);
+      draw(from + (to - from) * p);
+      if (p < 1) { anim = requestAnimationFrame(tick); return; }
+      anim = null; w = to; trail.push(w); draw(w); describe();
+      if (trail.length >= 3 && Math.abs(trail[trail.length - 1] - trail[trail.length - 3]) < 1e-9 && Math.abs(w - TARGET) > 0.01)
+        msg.textContent = "小球在两个位置之间来回跳，一直到不了碗底。";
+      else if (Math.abs(w - TARGET) < 0.01) msg.textContent = "到碗底了！";
+      else if (bumpy && Math.abs(slope(to)) < 0.05) msg.textContent = "小球停在了一个小坑里。这里不是最低的地方，但它脚下已经没有下坡了。";
+      else if (Math.abs(to - TARGET) > Math.abs(from - TARGET)) msg.textContent = "这一步跳过了碗底，而且比上一步离碗底更远了。";
+      else msg.textContent = "";
+      done && done();
+    });
+  }
+
+  function reset() {
+    if (anim) cancelAnimationFrame(anim);
+    anim = null; w = START; steps = 0; trail = [START]; out = false; msg.textContent = "";
+    draw(w); describe();
+  }
+
+  document.getElementById("go").onclick = function () { step(); };
+  document.getElementById("go5").onclick = function () {
+    var n = 0; (function next() { if (n++ < 5 && !out) step(function () { setTimeout(next, 120); }); })();
+  };
+  document.getElementById("reset").onclick = reset;
+  Array.prototype.forEach.call(document.querySelectorAll(".size"), function (b) {
+    b.onclick = function () {
+      Array.prototype.forEach.call(document.querySelectorAll(".size"), function (o) { o.setAttribute("aria-pressed", "false"); });
+      b.setAttribute("aria-pressed", "true"); lr = parseFloat(b.dataset.lr); reset();
+    };
+  });
+  Array.prototype.forEach.call(document.querySelectorAll(".shape"), function (b) {
+    b.onclick = function () {
+      Array.prototype.forEach.call(document.querySelectorAll(".shape"), function (o) { o.setAttribute("aria-pressed", "false"); });
+      b.setAttribute("aria-pressed", "true"); bumpy = b.dataset.bumpy === "1"; reset();
+    };
+  });
+  window.addEventListener("resize", size);
+  if (window.matchMedia) window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", function () { draw(w); });
+  new MutationObserver(function () { draw(w); }).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  size(); describe();
+})();
+</script>
+
+<script>
+(function () {
+  var cv = document.getElementById("cv2"), ctx = cv.getContext("2d");
+  var START = 0.5, TARGET = 2, XMIN = -0.5, XMAX = 4.5, YMAX = 7, LR = 0.1, TICK = 0.25;
+  var mode = "fine", w = START, master = START, steps = 0, anim = null;
+  var stepsEl = document.getElementById("steps2"), distEl = document.getElementById("dist2"), msg = document.getElementById("msg2");
+  function css(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+  function loss(x) { return (x - TARGET) * (x - TARGET); }
+  function slope(x) { return 2 * (x - TARGET); }
+  function snap(x) { return Math.round(x / TICK) * TICK; }
+  function size() {
+    var r = cv.getBoundingClientRect(), d = window.devicePixelRatio || 1;
+    var W = Math.max(280, r.width), H = Math.round(W * 0.5);
+    cv.width = W * d; cv.height = H * d; cv.style.height = H + "px";
+    ctx.setTransform(d, 0, 0, d, 0, 0); draw(w, master);
+  }
+  function geo() {
+    var d = window.devicePixelRatio || 1, W = cv.width / d, H = cv.height / d, pad = 24, top = 20, bot = 40;
+    return { W: W, H: H, base: H - bot,
+      X: function (x) { return pad + (x - XMIN) / (XMAX - XMIN) * (W - 2 * pad); },
+      Y: function (y) { return top + (1 - Math.min(y, YMAX) / YMAX) * (H - top - bot); } };
+  }
+  function draw(pos, mpos) {
+    var g = geo(), muted = css("--muted"), line = css("--line");
+    ctx.clearRect(0, 0, g.W, g.H);
+    ctx.beginPath();
+    for (var i = 0; i <= 200; i++) { var x = XMIN + (XMAX - XMIN) * i / 200; i ? ctx.lineTo(g.X(x), g.Y(loss(x))) : ctx.moveTo(g.X(x), g.Y(loss(x))); }
+    ctx.strokeStyle = css("--bowl"); ctx.lineWidth = 3; ctx.stroke();
+    // 刻度
+    ctx.strokeStyle = mode === "fine" ? line : muted; ctx.lineWidth = 1;
+    var step = mode === "fine" ? TICK / 5 : TICK;
+    for (var t = XMIN; t <= XMAX + 1e-9; t += step) {
+      var px = g.X(t), big = Math.abs(t / TICK - Math.round(t / TICK)) < 1e-6;
+      ctx.beginPath(); ctx.moveTo(px, g.base + 6); ctx.lineTo(px, g.base + (big ? 18 : 12)); ctx.stroke();
+    }
+    ctx.fillStyle = muted; ctx.font = "13px " + css("--font"); ctx.textAlign = "center";
+    ctx.fillText(mode === "fine" ? "细刻度" : "粗刻度：小球只能停在这些线上", g.X((XMIN + XMAX) / 2), g.base + 34);
+    // 碗底旗子
+    var fx = g.X(TARGET), fy = g.Y(0);
+    ctx.strokeStyle = css("--target"); ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(fx, fy); ctx.lineTo(fx, fy - 30); ctx.stroke();
+    ctx.fillStyle = css("--target");
+    ctx.beginPath(); ctx.moveTo(fx, fy - 30); ctx.lineTo(fx + 14, fy - 25); ctx.lineTo(fx, fy - 20); ctx.closePath(); ctx.fill();
+    // 小本子上的位置（空心圈）
+    if (mode === "mixed") {
+      ctx.beginPath(); ctx.arc(g.X(mpos), g.Y(loss(mpos)) - 9, 8, 0, Math.PI * 2);
+      ctx.strokeStyle = css("--arrow"); ctx.lineWidth = 2; ctx.stroke();
+    }
+    ctx.beginPath(); ctx.arc(g.X(pos), g.Y(loss(pos)) - 9, 9, 0, Math.PI * 2);
+    ctx.fillStyle = css("--ball"); ctx.fill();
+  }
+  function describe() {
+    stepsEl.textContent = steps;
+    var d = Math.abs(w - TARGET);
+    distEl.textContent = d < 0.01 ? "到了" : d < 0.3 ? "很近" : d < 1 ? "不远" : "很远";
+  }
+  function stepOnce(done) {
+    if (anim) { done && done(); return; }
+    var from = w, mfrom = master, to, mto = master;
+    if (mode === "fine") to = w - LR * slope(w);
+    else if (mode === "coarse") to = snap(w - LR * slope(w));
+    else { mto = master - LR * slope(master); to = snap(mto); }
+    var wanted = Math.abs(LR * slope(mode === "mixed" ? master : w));
+    steps++;
+    var t0 = null;
+    anim = requestAnimationFrame(function tick(t) {
+      if (t0 === null) t0 = t;
+      var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      var p = reduce ? 1 : Math.min(1, (t - t0) / 380);
+      draw(from + (to - from) * p, mfrom + (mto - mfrom) * p);
+      if (p < 1) { anim = requestAnimationFrame(tick); return; }
+      anim = null; w = to; master = mto; draw(w, master); describe();
+      if (Math.abs(w - TARGET) < 0.01) msg.textContent = "到碗底了！";
+      else if (mode === "coarse" && to === from) msg.textContent = "小球本来想走一小步，但这一步比半个刻度还短，又被放回了原来的刻度上。它不会再动了。";
+      else if (mode === "mixed" && to === from) msg.textContent = "小球这一步没动，但小本子上的位置（空心圈）往前挪了一点。";
+      else msg.textContent = "";
+      done && done();
+    });
+  }
+  function reset() {
+    if (anim) cancelAnimationFrame(anim);
+    anim = null; w = START; master = START; steps = 0; msg.textContent = ""; draw(w, master); describe();
+  }
+  document.getElementById("go2").onclick = function () { stepOnce(); };
+  document.getElementById("go25").onclick = function () { var n = 0; (function next() { if (n++ < 5) stepOnce(function () { setTimeout(next, 120); }); })(); };
+  document.getElementById("reset2").onclick = reset;
+  Array.prototype.forEach.call(document.querySelectorAll(".mode"), function (b) {
+    b.onclick = function () {
+      Array.prototype.forEach.call(document.querySelectorAll(".mode"), function (o) { o.setAttribute("aria-pressed", "false"); });
+      b.setAttribute("aria-pressed", "true"); mode = b.dataset.mode; reset();
+    };
+  });
+  window.addEventListener("resize", size);
+  if (window.matchMedia) window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", function () { draw(w, master); });
+  new MutationObserver(function () { draw(w, master); }).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  size(); describe();
+})();
+</script>
+
+</body></html>

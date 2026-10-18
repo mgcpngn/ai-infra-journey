@@ -1,0 +1,378 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>模型里面长什么样</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* 布局：一列从上往下读，三个部分，每部分 = 能动的东西 + 任务 + 折叠的名字 */
+:root{
+  --bg:#F4F6F3; --surface:#FFFFFF; --fg:#1E292C; --muted:#5F6F72; --line:#D3DBD8;
+  --main:#0F6E66; --main-soft:#D7EEEA; --lora:#B4530A; --lora-soft:#FBE7D3; --hot:#C2410C;
+  --sans:"PingFang SC","Noto Sans SC","Microsoft YaHei","Hiragino Sans GB",system-ui,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#111719; --surface:#1A2225; --fg:#E3EBE9; --muted:#93A5A8; --line:#2D3B3E;
+  --main:#3CC7B6; --main-soft:#16332F; --lora:#F2A03D; --lora-soft:#3A2612; --hot:#FB923C; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#111719; --surface:#1A2225; --fg:#E3EBE9; --muted:#93A5A8; --line:#2D3B3E;
+  --main:#3CC7B6; --main-soft:#16332F; --lora:#F2A03D; --lora-soft:#3A2612; --hot:#FB923C; color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:15px;line-height:1.7}
+.wrap{max-width:760px;margin:0 auto;padding-block:24px 64px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-direction:column;gap:28px}
+h1{font-size:26px;margin:0;text-wrap:balance}
+h2{font-size:19px;margin:0 0 4px;text-wrap:balance}
+p{margin:0}
+.lead{color:var(--muted)}
+section{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.tag{font-size:12px;letter-spacing:.06em;color:var(--muted)}
+.task{border-left:3px solid var(--main);padding:6px 12px;background:var(--main-soft);border-radius:0 6px 6px 0}
+.task ol{margin:4px 0 0;padding-left:20px}
+details{border-top:1px dashed var(--line);padding-top:10px}
+summary{cursor:pointer;color:var(--main);font-weight:600}
+details > div{margin-top:8px;display:flex;flex-direction:column;gap:6px}
+button{font:inherit;border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:6px;padding:6px 12px;cursor:pointer}
+button:focus-visible,input:focus-visible,summary:focus-visible{outline:2px solid var(--main);outline-offset:2px}
+button.on{background:var(--lora);color:var(--surface);border-color:var(--lora)}
+button.primary{background:var(--main);color:var(--surface);border-color:var(--main)}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.lora-c{color:var(--lora);font-weight:600}
+.main-c{color:var(--main);font-weight:600}
+
+/* 第 1 部分：小表 */
+.lab{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:14px;align-items:center}
+@media (max-width:560px){.lab{grid-template-columns:1fr}.arrow{transform:rotate(90deg);justify-self:center}}
+.ins{display:flex;flex-direction:column;gap:8px}
+.ins label{display:grid;grid-template-columns:3.2em 1fr 3.4em;gap:6px;align-items:center;font-size:13px}
+input[type=range]{width:100%;accent-color:var(--main)}
+.grid{display:grid;grid-template-columns:repeat(3,auto);gap:4px;justify-content:center}
+.cell{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:13px;padding:6px 8px;border:1px solid var(--line);border-radius:4px;background:var(--bg);text-align:right;min-width:3.6em;transition:background .4s}
+.cell.flash{background:var(--lora-soft)}
+.outs{display:flex;flex-direction:column;gap:10px}
+.out{display:flex;flex-direction:column;gap:3px;font-size:13px}
+.bar{height:14px;border-radius:3px;background:var(--line);position:relative;overflow:hidden}
+.bar i{position:absolute;top:0;bottom:0;left:50%;background:var(--main);transition:all .25s}
+.bar i.neg{background:var(--hot)}
+.arrow{font-size:22px;color:var(--muted);text-align:center}
+.side{border:2px dashed var(--lora);border-radius:8px;padding:8px 10px;background:var(--lora-soft);font-size:13px;display:flex;flex-direction:column;gap:4px}
+.side[hidden]{display:none!important}
+
+/* 第 2 部分：从进到出 */
+.flow{display:flex;flex-direction:column;align-items:stretch;gap:6px}
+.box{border:1px solid var(--line);border-radius:8px;padding:8px 12px;background:var(--bg);display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;transition:background .2s,border-color .2s}
+.box b{font-weight:600}
+.box small{color:var(--muted)}
+.box.layer{cursor:pointer}
+.box.layer:hover{border-color:var(--main)}
+.box.lit{background:var(--main-soft);border-color:var(--main)}
+.down{text-align:center;color:var(--muted);font-size:13px;line-height:1}
+.gap{text-align:center;color:var(--muted);font-size:13px}
+.bracket{display:grid;grid-template-columns:5.2em minmax(0,1fr);gap:8px;align-items:stretch}
+.bracket .lbl{font-size:12px;color:var(--muted);border-right:2px solid var(--line);padding-right:6px;display:flex;align-items:center;justify-content:flex-end;text-align:right}
+.inside{border:2px solid var(--main);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:8px}
+.part{border:1px solid var(--line);border-radius:8px;padding:10px;display:flex;flex-direction:column;gap:6px}
+.part h3{margin:0;font-size:15px}
+.tbl{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:13px}
+.t{font-family:var(--mono);border:1px solid var(--main);color:var(--main);border-radius:4px;padding:2px 8px;background:var(--surface)}
+.pin{font-size:11px;color:var(--lora);border:1px dashed var(--lora);border-radius:4px;padding:1px 6px}
+.pin[hidden]{display:none!important}
+
+/* 第 3 部分：LoRA 并排 */
+.svgbox{overflow-x:auto}
+svg{display:block;max-width:100%;height:auto}
+svg text{font-family:var(--sans);font-size:13px;fill:var(--fg)}
+svg .mut{fill:var(--muted);font-size:12px}
+svg .pathMain{stroke:var(--main);stroke-width:3;fill:none}
+svg .pathLora{stroke:var(--lora);stroke-width:3;fill:none;stroke-dasharray:6 5}
+svg .boxMain{fill:var(--main-soft);stroke:var(--main);stroke-width:1.5}
+svg .boxLora{fill:var(--lora-soft);stroke:var(--lora);stroke-width:1.5}
+svg .boxPlain{fill:var(--surface);stroke:var(--line);stroke-width:1.5}
+svg .dotM{fill:var(--main)}
+svg .dotL{fill:var(--lora)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head><body>
+
+<div class="wrap">
+  <header style="display:flex;flex-direction:column;gap:6px">
+    <h1>模型里面长什么样</h1>
+    <p class="lead">三个部分。每部分先动手看，再读名字。名字都折在每部分最后。</p>
+  </header>
+
+  <!-- 第 1 部分 -->
+  <section id="s1">
+    <div class="tag">第 1 部分 · 一张表在做什么</div>
+    <h2>3 个数进去，2 个数出来</h2>
+    <p>左边是进来的 3 个数。中间是一张格子，格子里是参数。右边是出来的 2 个数。电脑负责算，你只看谁跟着谁动。</p>
+    <div class="lab">
+      <div class="ins" id="ins"></div>
+      <div class="arrow">→</div>
+      <div style="display:flex;flex-direction:column;gap:10px;align-items:center;min-width:0">
+        <div class="tag">格子（参数）</div>
+        <div class="grid" id="grid"></div>
+        <div class="side" id="side1" hidden>
+          <b class="lora-c">旁边的小路（LoRA）</b>
+          <span>3 个数 → <b>1 个数</b> → 2 个数</span>
+          <span class="num" id="sideVals"></span>
+        </div>
+      </div>
+    </div>
+    <div class="outs" id="outs"></div>
+    <div class="row">
+      <button id="loraBtn">接上旁边的小路</button>
+      <button id="mergeBtn" disabled>把小路合并进格子</button>
+      <button id="resetBtn">回到开头</button>
+    </div>
+    <div class="task"><b>任务</b>
+      <ol>
+        <li>拖第 1 个进来的数。右边哪个出来的数动了？</li>
+        <li>点「接上旁边的小路」。格子里的数变了吗？出来的数变了吗？</li>
+        <li>再点一次，关掉小路。出来的数回到哪里？</li>
+        <li>接上小路后，点「合并」。小路去哪了？格子变了吗？出来的数变了吗？</li>
+      </ol>
+    </div>
+    <details><summary>看名字</summary><div>
+      <p>这种格子叫 <b>表</b>。一张表把一组数变成另一组数。每个出来的数，都是按格子里的比例，把进来的数混在一起。</p>
+      <p>表里的格子就是 <b>参数</b>。训练改的就是这些格子。</p>
+      <p>Qwen3 的 q_proj 就是这样一张表，只是更大：1024 个数进去，2048 个数出来，格子有 2,097,152 个。</p>
+      <p>小路就是 <b>LoRA</b>：进来的数先挤成很少几个数（Qwen3 里是 8 个），再放回原来的个数，最后加到大表的结果上。</p>
+    </div></details>
+  </section>
+
+  <!-- 第 2 部分 -->
+  <section id="s2">
+    <div class="tag">第 2 部分 · 一个字从进到出</div>
+    <h2>「落」字走一遍 Qwen3-0.6B</h2>
+    <p>点「走一遍」，看亮的位置往下走。然后点任意一个「层」，看它里面有什么。</p>
+    <div class="row"><button class="primary" id="walkBtn">走一遍</button><span class="tag" id="walkMsg"></span></div>
+    <div class="flow" id="flow"></div>
+    <div class="inside" id="inside">
+      <div class="tag" id="insideTitle">每一层里面（28 层都一样，只是格子里的参数不同）</div>
+      <div class="part">
+        <h3>前半：注意力 <small style="color:var(--muted);font-weight:400">这个字去看句子里的别的字，取信息</small></h3>
+        <div class="tbl"><span class="t">q_proj</span> 1024 → 2048 个数，叫 Q：我要找什么 <span class="pin" data-pin>LoRA 挂这里</span></div>
+        <div class="tbl"><span class="t">k_proj</span> 1024 → 1024 个数，叫 K：我是什么 <span class="pin" data-pin>LoRA 挂这里</span></div>
+        <div class="tbl"><span class="t">v_proj</span> 1024 → 1024 个数，叫 V：我能提供什么 <span class="pin" data-pin>LoRA 挂这里</span></div>
+        <div class="tbl" style="color:var(--muted)">用这个字的 Q 去和前面每个字的 K 比，越像越关注，再按关注多少取它们的 V（这一步没有表）</div>
+        <div class="tbl"><span class="t">o_proj</span> 2048 → 1024 个数，把取到的信息整理回 1024 个 <span class="pin" data-pin>LoRA 挂这里</span></div>
+        <div class="tbl" style="color:var(--muted)">结果加回到这个字原来的 1024 个数上。每层只改一点，不推倒重来。</div>
+      </div>
+      <div class="part">
+        <h3>后半：MLP <small style="color:var(--muted);font-weight:400">这个字自己想一想，不看别的字</small></h3>
+        <div class="tbl"><span class="t">gate_proj</span><span class="t">up_proj</span> 1024 → 3072 个数</div>
+        <div class="tbl"><span class="t">down_proj</span> 3072 → 1024 个数</div>
+        <div class="tbl" style="color:var(--muted)">结果也加回到原来的 1024 个数上。</div>
+      </div>
+      <div class="row"><button id="pinBtn">显示第 6 步 LoRA 挂在哪</button></div>
+    </div>
+    <div class="task"><b>任务</b>
+      <ol>
+        <li>走一遍时，一个字在每一层之间一直是多少个数？</li>
+        <li>q_proj 是一层吗？还是一层里面的一样东西？</li>
+        <li>点「显示 LoRA 挂在哪」。LoRA 自己占了一层吗？</li>
+      </ol>
+    </div>
+    <details><summary>看名字</summary><div>
+      <p>课本上的画法是「输入层 → 隐藏层 → 输出层」。对到 Qwen3：</p>
+      <p><b>输入</b> = 查字表，把「落」换成 1024 个数。</p>
+      <p><b>中间</b> = 28 个 <b>层</b>（课本叫隐藏层，我们的词表统一叫「层」）。每层 = 注意力 + MLP。</p>
+      <p><b>输出</b> = 打分：把最后的 1024 个数变成字表里 151,936 个 token 各一个分数，分数最高的最可能是下一个字。</p>
+      <p>q_proj 不是一层。它是每一层注意力里的第一张表。一层里有 7 张大表（q k v o + gate up down）。</p>
+    </div></details>
+  </section>
+
+  <!-- 第 3 部分 -->
+  <section id="s3">
+    <div class="tag">第 3 部分 · LoRA 串在前面，串在后面，还是并排</div>
+    <h2>放大看一张 q_proj</h2>
+    <p>点「接上 LoRA」，看点点从哪里分开，又在哪里汇合。</p>
+    <div class="row">
+      <button id="lora3">接上 LoRA</button>
+      <span class="tag" id="lora3Msg">现在：只有大表</span>
+    </div>
+    <div class="svgbox">
+      <svg viewBox="0 0 640 250" width="640" role="img" aria-label="q_proj 内部：大表一条路，LoRA 一条小路，两条路在加号处汇合">
+        <rect class="boxPlain" x="10" y="95" width="96" height="50" rx="6"/>
+        <text x="58" y="117" text-anchor="middle">进来</text>
+        <text x="58" y="135" text-anchor="middle" class="mut">1024 个数</text>
+
+        <path class="pathMain" d="M106 120 H232"/>
+        <rect class="boxMain" x="232" y="88" width="150" height="64" rx="6"/>
+        <text x="307" y="114" text-anchor="middle">大表（原来的）</text>
+        <text x="307" y="134" text-anchor="middle" class="mut">2,097,152 个格子</text>
+        <path class="pathMain" d="M382 120 H500"/>
+
+        <g id="loraG" opacity="0.12">
+          <path class="pathLora" d="M150 120 V205 H210"/>
+          <rect class="boxLora" x="210" y="185" width="90" height="40" rx="6"/>
+          <text x="255" y="210" text-anchor="middle">A：压成 8</text>
+          <path class="pathLora" d="M300 205 H330"/>
+          <rect class="boxLora" x="330" y="185" width="100" height="40" rx="6"/>
+          <text x="380" y="210" text-anchor="middle">B：放回 2048</text>
+          <path class="pathLora" d="M430 205 H520 V140"/>
+          <text x="150" y="240" class="mut">同一份数，同时也走小路</text>
+          <text x="500" y="240" class="mut" text-anchor="middle">两份结果相加</text>
+        </g>
+
+        <circle cx="520" cy="120" r="18" class="boxPlain"/>
+        <text x="520" y="126" text-anchor="middle" style="font-size:20px">+</text>
+        <path class="pathMain" d="M538 120 H560"/>
+        <rect class="boxPlain" x="560" y="95" width="74" height="50" rx="6"/>
+        <text x="597" y="117" text-anchor="middle">出去</text>
+        <text x="597" y="135" text-anchor="middle" class="mut">2048 个数</text>
+
+        <text x="150" y="80" class="mut" text-anchor="middle" id="splitLbl" opacity="0">分开</text>
+        <circle id="dm" r="6" class="dotM" cx="58" cy="120" opacity="0"/>
+        <circle id="dl" r="6" class="dotL" cx="150" cy="120" opacity="0"/>
+      </svg>
+    </div>
+    <div class="task"><b>任务</b>
+      <ol>
+        <li>小路的点点在大表前面出发，还是从大表后面出发？</li>
+        <li>大表里的格子，接上 LoRA 以后被改了吗？（回想第 1 部分）</li>
+        <li>为什么拔掉小路，结果和原模型一个数都不差？</li>
+      </ol>
+    </div>
+    <details><summary>看名字</summary><div>
+      <p>LoRA 不串在前面，也不串在后面，是 <b>并排</b>：同一份进来的数，同时走大表和小路，两份结果在加号处相加。</p>
+      <p>大表一个格子都没改。所以拔掉小路，就只剩大表，结果就和原模型一样。这就是 lora_peek 第 3 段「关掉」和「原模型」完全相同的原因。</p>
+      <p>第 6 步在每一层的 q、k、v、o 四张表旁边各挂一条小路。28 层 × 4 张 = 112 条小路，加起来 2,293,760 个数。</p>
+      <p>合并 = 把小路的效果直接加进大表的格子，然后扔掉小路。所以合并后又是一张普通的表，参数个数回到 596,049,920。</p>
+    </div></details>
+  </section>
+</div>
+
+<script>
+(function(){
+  // ---------- 第 1 部分 ----------
+  const W0=[[0.8,-0.3,0.5],[0.2,0.6,-0.7]];
+  const A=[0.6,0.6,0];          // 3 → 1
+  const B=[0.7,-0.5];           // 1 → 2
+  let W=W0.map(r=>r.slice()), x=[0.5,0.5,0.5], lora=false, merged=false;
+  const ins=document.getElementById('ins'), grid=document.getElementById('grid'), outs=document.getElementById('outs');
+  const side=document.getElementById('side1'), sideVals=document.getElementById('sideVals');
+  const loraBtn=document.getElementById('loraBtn'), mergeBtn=document.getElementById('mergeBtn');
+  const f=v=>(v>=0?'+':'')+v.toFixed(2);
+  x.forEach((v,i)=>{
+    const l=document.createElement('label');
+    l.innerHTML=`<span>进 ${i+1}</span><input type="range" id="x${i}" min="-1" max="1" step="0.05" value="${v}"><span class="num" id="xv${i}"></span>`;
+    ins.appendChild(l);
+    l.querySelector('input').addEventListener('input',e=>{x[i]=+e.target.value;draw1();});
+  });
+  const outEls=[0,1].map(j=>{
+    const d=document.createElement('div');d.className='out';
+    d.innerHTML=`<div class="row" style="justify-content:space-between"><span>出 ${j+1}</span><span class="num" id="yv${j}"></span></div><div class="bar"><i id="yb${j}"></i></div><div class="tag" id="yo${j}"></div>`;
+    outs.appendChild(d);return d;
+  });
+  const orig=()=>W0.map(r=>r.reduce((s,w,i)=>s+w*x[i],0));
+  function draw1(flashCells){
+    grid.innerHTML='';
+    W.forEach((r,j)=>r.forEach((w,i)=>{
+      const c=document.createElement('div');c.className='cell'+(flashCells?' flash':'');c.textContent=f(w);
+      c.title=`进 ${i+1} → 出 ${j+1}`;grid.appendChild(c);
+      if(flashCells)setTimeout(()=>c.classList.remove('flash'),900);
+    }));
+    x.forEach((v,i)=>document.getElementById('xv'+i).textContent=f(v));
+    const big=W.map(r=>r.reduce((s,w,i)=>s+w*x[i],0));
+    const mid=A.reduce((s,a,i)=>s+a*x[i],0);
+    const small=B.map(b=>b*mid);
+    const y=big.map((v,j)=>v+(lora&&!merged?small[j]:0));
+    sideVals.textContent=`中间那 1 个数 = ${f(mid)}；加到出 1 上 ${f(small[0])}，加到出 2 上 ${f(small[1])}`;
+    const o=orig();
+    y.forEach((v,j)=>{
+      document.getElementById('yv'+j).textContent=f(v);
+      const b=document.getElementById('yb'+j), w=Math.min(Math.abs(v),2)/2*50;
+      b.className=v<0?'neg':'';b.style.left=(v<0?50-w:50)+'%';b.style.width=w+'%';
+      const same=Math.abs(v-o[j])<1e-9;
+      document.getElementById('yo'+j).textContent=same?'和原来的格子算出来的一样':`原来的格子算出来是 ${f(o[j])}`;
+    });
+  }
+  loraBtn.addEventListener('click',()=>{
+    if(merged)return;
+    lora=!lora;side.hidden=!lora;loraBtn.classList.toggle('on',lora);
+    loraBtn.textContent=lora?'关掉旁边的小路':'接上旁边的小路';
+    mergeBtn.disabled=!lora;draw1();
+  });
+  mergeBtn.addEventListener('click',()=>{
+    W=W0.map((r,j)=>r.map((w,i)=>w+B[j]*A[i]));
+    merged=true;side.hidden=true;mergeBtn.disabled=true;loraBtn.disabled=true;
+    loraBtn.classList.remove('on');loraBtn.textContent='小路已合并';draw1(true);
+  });
+  document.getElementById('resetBtn').addEventListener('click',()=>{
+    W=W0.map(r=>r.slice());lora=false;merged=false;side.hidden=true;
+    loraBtn.disabled=false;loraBtn.classList.remove('on');loraBtn.textContent='接上旁边的小路';mergeBtn.disabled=true;draw1();
+  });
+  draw1();
+
+  // ---------- 第 2 部分 ----------
+  const flow=document.getElementById('flow');
+  const items=[
+    {k:'in',t:'「落」',s:'一个 token',br:'输入'},
+    {k:'emb',t:'查字表',s:'换成 1024 个数',br:'输入'},
+    {k:'L',n:1},{k:'L',n:2},{k:'gap'},{k:'L',n:27},{k:'L',n:28},
+    {k:'head',t:'打分',s:'1024 个数 → 151,936 个分数',br:'输出'},
+    {k:'out',t:'下一个字',s:'分数最高的最可能',br:'输出'}
+  ];
+  const lit=[];
+  const groups={输入:[],中间:[],输出:[]};
+  items.forEach(it=>{
+    let el;
+    if(it.k==='gap'){el=document.createElement('div');el.className='gap';el.textContent='⋮ 中间还有 24 层，样子一样 ⋮';groups['中间'].push(el);return;}
+    el=document.createElement('div');
+    if(it.k==='L'){
+      el.className='box layer';el.tabIndex=0;el.setAttribute('role','button');
+      el.innerHTML=`<b>层 ${it.n}</b><small>1024 个数 → 注意力 → MLP → 1024 个数 · 点开看里面</small>`;
+      const open=()=>{document.getElementById('insideTitle').textContent=`层 ${it.n} 里面（28 层都一样，只是格子里的参数不同）`;document.getElementById('inside').scrollIntoView({behavior:'smooth',block:'nearest'});};
+      el.addEventListener('click',open);el.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();open();}});
+      groups['中间'].push(el);
+    }else{
+      el.className='box';el.innerHTML=`<b>${it.t}</b><small>${it.s}</small>`;groups[it.br].push(el);
+    }
+    lit.push(el);
+  });
+  Object.entries(groups).forEach(([name,els],gi)=>{
+    const br=document.createElement('div');br.className='bracket';
+    const lb=document.createElement('div');lb.className='lbl';lb.textContent=name==='中间'?'中间（28 层）':name;
+    const col=document.createElement('div');col.className='flow';
+    els.forEach((e,i)=>{col.appendChild(e);if(i<els.length-1){const d=document.createElement('div');d.className='down';d.textContent='↓';col.appendChild(d);}});
+    br.appendChild(lb);br.appendChild(col);flow.appendChild(br);
+    if(gi<2){const d=document.createElement('div');d.className='down';d.textContent='↓';flow.appendChild(d);}
+  });
+  const msgs=['一个 token 进来','变成 1024 个数','层 1：改一点，还是 1024 个数','层 2：再改一点，还是 1024 个数','……','层 28：最后一次改，还是 1024 个数','变成每个 token 一个分数','选出下一个字'];
+  let timer=null;
+  document.getElementById('walkBtn').addEventListener('click',()=>{
+    clearInterval(timer);let i=0;lit.forEach(e=>e.classList.remove('lit'));
+    const msg=document.getElementById('walkMsg');
+    const step=()=>{lit.forEach(e=>e.classList.remove('lit'));if(i>=lit.length){clearInterval(timer);msg.textContent='走完了';return;}
+      lit[i].classList.add('lit');msg.textContent=msgs[i]||'';i++;};
+    step();timer=setInterval(step,800);
+  });
+  let pins=false;const pinEls=document.querySelectorAll('[data-pin]');pinEls.forEach(p=>p.hidden=true);
+  document.getElementById('pinBtn').addEventListener('click',e=>{pins=!pins;pinEls.forEach(p=>p.hidden=!pins);
+    e.target.classList.toggle('on',pins);e.target.textContent=pins?'藏起 LoRA':'显示第 6 步 LoRA 挂在哪';});
+
+  // ---------- 第 3 部分 ----------
+  const g=document.getElementById('loraG'), dm=document.getElementById('dm'), dl=document.getElementById('dl'), split=document.getElementById('splitLbl');
+  const btn3=document.getElementById('lora3'), m3=document.getElementById('lora3Msg');
+  let on3=false, t0=null;
+  const reduce=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches;
+  btn3.addEventListener('click',()=>{on3=!on3;g.setAttribute('opacity',on3?1:0.12);split.setAttribute('opacity',on3?1:0);
+    btn3.classList.toggle('on',on3);btn3.textContent=on3?'拔掉 LoRA':'接上 LoRA';
+    m3.textContent=on3?'现在：大表 + 旁边的小路，并排':'现在：只有大表（大表没变过）';});
+  // 主路：58→520→597；小路：150 分开 → 下到 205 → 横走 → 上到 140 → 520
+  const lerp=(a,b,t)=>a+(b-a)*t;
+  const loraPts=[[150,120],[150,205],[520,205],[520,140],[520,120]];
+  function along(pts,t){let L=[],tot=0;for(let i=1;i<pts.length;i++){const d=Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]);L.push(d);tot+=d;}
+    let s=t*tot;for(let i=0;i<L.length;i++){if(s<=L[i]){const r=s/L[i];return[lerp(pts[i][0],pts[i+1][0],r),lerp(pts[i][1],pts[i+1][1],r)];}s-=L[i];}return pts[pts.length-1];}
+  function frame(ts){
+    if(t0===null)t0=ts;const T=((ts-t0)%3200)/3200;
+    // 主点：0–0.15 从 58 到 150，0.15–0.8 从 150 到 520，0.8–1 到 597
+    let mx=T<0.15?lerp(58,150,T/0.15):T<0.8?lerp(150,520,(T-0.15)/0.65):lerp(520,597,(T-0.8)/0.2);
+    dm.setAttribute('cx',mx);dm.setAttribute('opacity',1);
+    if(on3&&T>=0.15&&T<0.8){const p=along(loraPts,(T-0.15)/0.65);dl.setAttribute('cx',p[0]);dl.setAttribute('cy',p[1]);dl.setAttribute('opacity',1);}
+    else dl.setAttribute('opacity',0);
+    requestAnimationFrame(frame);
+  }
+  if(!reduce)requestAnimationFrame(frame);
+})();
+</script>
+
+</body></html>

@@ -43,7 +43,7 @@
 | 4 | [小 GPT（约 1700 万参数）](stage0/04-mini-gpt/) | 自注意力、为什么能看长上下文 | attention 显存随长度平方增长，FlashAttention 要解决的问题 | 4 瓶颈（显存随长度增长） | ✅ 已过关 |
 | 5 | [给自己的模型做推理优化](stage0/05-inference-opt/) | KV cache、prefill/decode、batch、量化 | TTFT、TPOT、吞吐的来源 | 1 用户数、2 等多久、4 瓶颈、5 改善 | ✅ |
 | 6 | [LoRA 微调 Qwen3-0.6B](stage0/06-lora/) | 预训练、全量微调、LoRA | 客户常要部署微调模型，vLLM 可挂 LoRA | 1 用户数、5 改善（一个模型挂多个 LoRA） | ✅ |
-| 7 | [DPO 对齐](stage0/07-dpo/) | 偏好训练：这首比那首好 | 训练时要多带一个不动的旧模型；推理模型的长思考链，decode 占大头的来源 | 2 等多久（长思考链让 decode 变长） | 🔄 |
+| 7 | [DPO 对齐](stage0/07-dpo/) | 偏好训练：这首比那首好 | 训练时要多带一个不动的旧模型；推理模型的长思考链，decode 占大头的来源 | 2 等多久（长思考链让 decode 变长） | ✅ |
 
 ### 第 1 月：一张推理全景图 + 会读指标
 

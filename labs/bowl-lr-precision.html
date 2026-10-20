@@ -47,7 +47,7 @@ button {
   border: 1px solid var(--line); background: var(--panel); color: var(--fg);
 }
 button:focus-visible { outline: 3px solid var(--arrow); outline-offset: 2px; }
-button.size[aria-pressed="true"], button.shape[aria-pressed="true"], button.mode[aria-pressed="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+button.size[aria-pressed="true"], button.shape[aria-pressed="true"], button.mode[aria-pressed="true"], button.flat[aria-pressed="true"] { background: var(--fg); color: var(--bg); border-color: var(--fg); }
 button.go { background: var(--ball); color: #fff; border-color: var(--ball); font-weight: 600; padding: 10px 22px; }
 .tasks { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 20px; }
 .tasks h2 { font-size: 18px; margin: 0 0 8px; }
@@ -133,6 +133,11 @@ h2.part { font-size: 22px; margin: 24px 0 0; padding-top: 20px; border-top: 1px 
       <button class="mode" id="m2" data-mode="coarse" aria-pressed="false">粗刻度</button>
       <button class="mode" id="m3" data-mode="mixed" aria-pressed="false">粗刻度 + 细刻度小本子</button>
     </div>
+    <div class="row" role="group" aria-label="碗的坡">
+      <span class="label">碗：</span>
+      <button class="flat" id="f1" data-k="1" aria-pressed="true">正常的碗</button>
+      <button class="flat" id="f2" data-k="0.5" aria-pressed="false">更平的碗</button>
+    </div>
     <div class="row">
       <button class="go" id="go2">走一步</button>
       <button id="go25">连走 5 步</button>
@@ -141,11 +146,12 @@ h2.part { font-size: 22px; margin: 24px 0 0; padding-top: 20px; border-top: 1px 
   </div>
 
   <div class="tasks">
-    <h2>请做这 3 件事</h2>
+    <h2>请做这 4 件事</h2>
     <ol>
       <li>选「细刻度」，连走几次。<span>小球能到碗底吗？</span></li>
       <li>放回起点，选「粗刻度」，连走几次。<span>小球停在哪里？为什么停住了？提示：看越靠近碗底，每一步本来想走多远，和刻度之间的距离比一比。</span></li>
       <li>放回起点，<b>先猜</b>：选「粗刻度 + 细刻度小本子」，小球能到碗底吗？然后连走几次。<span>空心的圈就是小本子上记的位置。</span></li>
+      <li>选「粗刻度」，再选「更平的碗」。<b>先猜</b>：小球会比正常的碗更早卡住，还是更晚？卡在离碗底更远，还是更近？然后连走几次。</li>
     </ol>
     <p style="margin:12px 0 0">做完用你自己的话告诉我：那个「小本子」起了什么作用？</p>
   </div>
@@ -304,11 +310,11 @@ h2.part { font-size: 22px; margin: 24px 0 0; padding-top: 20px; border-top: 1px 
 (function () {
   var cv = document.getElementById("cv2"), ctx = cv.getContext("2d");
   var START = 0.5, TARGET = 2, XMIN = -0.5, XMAX = 4.5, YMAX = 7, LR = 0.1, TICK = 0.25;
-  var mode = "fine", w = START, master = START, steps = 0, anim = null;
+  var mode = "fine", w = START, master = START, steps = 0, anim = null, K = 1;
   var stepsEl = document.getElementById("steps2"), distEl = document.getElementById("dist2"), msg = document.getElementById("msg2");
   function css(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
-  function loss(x) { return (x - TARGET) * (x - TARGET); }
-  function slope(x) { return 2 * (x - TARGET); }
+  function loss(x) { return K * (x - TARGET) * (x - TARGET); }
+  function slope(x) { return 2 * K * (x - TARGET); }
   function snap(x) { return Math.round(x / TICK) * TICK; }
   function size() {
     var r = cv.getBoundingClientRect(), d = window.devicePixelRatio || 1;
@@ -390,6 +396,12 @@ h2.part { font-size: 22px; margin: 24px 0 0; padding-top: 20px; border-top: 1px 
     b.onclick = function () {
       Array.prototype.forEach.call(document.querySelectorAll(".mode"), function (o) { o.setAttribute("aria-pressed", "false"); });
       b.setAttribute("aria-pressed", "true"); mode = b.dataset.mode; reset();
+    };
+  });
+  Array.prototype.forEach.call(document.querySelectorAll(".flat"), function (b) {
+    b.onclick = function () {
+      Array.prototype.forEach.call(document.querySelectorAll(".flat"), function (o) { o.setAttribute("aria-pressed", "false"); });
+      b.setAttribute("aria-pressed", "true"); K = parseFloat(b.dataset.k); reset();
     };
   });
   window.addEventListener("resize", size);

@@ -21,9 +21,13 @@ python train_loop.py          # poems.csv 已经在这里（昨天 peek_data.py 
 ```bash
 git clone https://github.com/mgcpngn/ai-infra-journey.git   # 已经有就 git pull
 cd ai-infra-journey/stage0/08-train-loop
-python3 -m pip install torch transformers peft pandas
-HF_ENDPOINT=https://hf-mirror.com python3 train_loop_mac.py   # 第一次会下载模型，约 1.2 GB
+python3 -m venv ~/venv-ai           # 建一个只给这个项目用的 Python 环境，只做一次
+source ~/venv-ai/bin/activate       # 进入环境；每次开新终端都要运行这一行，命令行前面会出现 (venv-ai)
+python -m pip install torch transformers peft pandas -i https://pypi.tuna.tsinghua.edu.cn/simple
+HF_ENDPOINT=https://hf-mirror.com python train_loop_mac.py   # 第一次会下载模型，约 1.2 GB
 ```
+为什么要 venv：Homebrew 的 Python 不让直接装库（报错 `externally-managed-environment`）。
+如果装 torch 时报找不到合适的版本：`brew install python@3.12 && python3.12 -m venv ~/venv-ai`，再从 `source` 那一行开始（推测：Python 太新，torch 还没有出安装包）。
 
 ## 2. 程序的结构
 

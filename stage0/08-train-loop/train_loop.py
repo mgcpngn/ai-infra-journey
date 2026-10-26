@@ -90,7 +90,7 @@ n_train = sum(p.numel() for p in params)
 print(f"[准备 B] 要训练的参数 {n_train:,} 个（占 {n_train / n_all:.3%}），加上以后：+{m_ready - m_model:.0f} MB")
 
 # ---------- 训练：每一步 5 个环节 ----------
-print("\nstep   loss    |  时间 ms：1挑数据 2猜下一个字 3算loss 4算梯度 5改参数  合计  |  显存 MB：猜完 算完梯度 改完")
+print("\nstep   loss    |  时间 ms：1挑数据 2猜下一个字 3算loss 4算梯度 5改参数  合计  |  显存 MB：猜完 算完loss 算完梯度 改完")
 g = torch.Generator().manual_seed(0)  # 挑行号的随机数在 CPU 上，两台电脑挑到的行一样
 torch.manual_seed(0)
 model.train()
@@ -110,6 +110,7 @@ for step in range(1, STEPS + 1):
     # 环节 3：算 loss。第 t 个位置的分数去猜第 t+1 个 token，所以错开一位
     loss = F.cross_entropy(logits[:, :-1].flatten(0, 1).float(), y[:, 1:].flatten(), ignore_index=-100)
     t3 = now()
+    mem3 = mem()
 
     # 环节 4：算梯度。每个要训练的参数得到一个梯度
     loss.backward()
@@ -119,17 +120,17 @@ for step in range(1, STEPS + 1):
     # 环节 5：改参数。AdamW 按学习率和梯度改每个要训练的参数，然后清空梯度
     opt.step()
     opt.zero_grad(set_to_none=True)
+    loss_val, shape, logits_mb = loss.item(), tuple(logits.shape), logits.numel() * logits.element_size() / MB
+    del logits, loss  # 这一步用完了，扔掉。不扔的话，下面量到的「改完」会多算 logits
     t5 = now()
     mem5 = mem()
 
     d = [(t1 - t0) * 1e3, (t2 - t1) * 1e3, (t3 - t2) * 1e3, (t4 - t3) * 1e3, (t5 - t4) * 1e3]
     ms.append(d)
-    print(f"{step:>4}  {loss.item():.4f}  |  {d[0]:6.1f} {d[1]:9.1f} {d[2]:8.1f} {d[3]:7.1f} {d[4]:7.1f}  {sum(d):6.1f}"
-          f"  |  {mem2:6.0f} {mem4:7.0f} {mem5:7.0f}")
+    print(f"{step:>4}  {loss_val:.4f}  |  {d[0]:6.1f} {d[1]:9.1f} {d[2]:8.1f} {d[3]:7.1f} {d[4]:7.1f}  {sum(d):6.1f}"
+          f"  |  {mem2:6.0f} {mem3:7.0f} {mem4:7.0f} {mem5:7.0f}")
     if step == 1:
-        print(f"      （logits 的大小 {tuple(logits.shape)} = {BATCH}首 × {L}个位置 × 词表里的 token 数，"
-              f"占 {logits.numel() * logits.element_size() / MB:.0f} MB）")
-    del logits, loss
+        print(f"      （logits 的大小 {shape} = {BATCH}首 × {L}个位置 × 词表里的 token 数，占 {logits_mb:.0f} MB）")
 
 # ---------- 汇总 ----------
 rest = ms[1:] if len(ms) > 1 else ms  # 第 1 步要做很多第一次的准备，比较慢，不算

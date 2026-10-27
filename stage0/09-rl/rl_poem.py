@@ -26,6 +26,7 @@ LR = 2e-4       # 学习率（和第 6 步一样）
 STEPS = 100     # 训练几步
 R = 8           # LoRA 的 r
 SHOW_EVERY = 10  # 每几步打印一首诗看看
+BALANCE = False  # True = 五言、七言题目轮流出；False = 随机挑（七言多，10,540 首对 3,935 首）
 # ======================================================
 
 MODEL = "Qwen/Qwen3-0.6B-Base"
@@ -64,6 +65,7 @@ if tok.pad_token_id is None:
     tok.pad_token = tok.eos_token
 df = pd.read_csv("../08-train-loop/poems.csv", dtype=str, encoding="utf-8-sig")
 items = list(zip(df["题目"], df["体裁"]))
+by_genre = {g: [it for it in items if it[1] == g] for g in ("五言绝句", "七言绝句")}
 model = AutoModelForCausalLM.from_pretrained(MODEL, torch_dtype=torch.bfloat16).to(dev)
 model = get_peft_model(model, LoraConfig(r=R, lora_alpha=16, lora_dropout=0.0, task_type="CAUSAL_LM",
                                          target_modules=["q_proj", "k_proj", "v_proj", "o_proj"]))
@@ -86,22 +88,23 @@ def write(title, genre, n, seed):
     return out, P, poems
 
 
-# 训练前后都用这 5 个题目各写 1 首，好对比
-fixed = items[:5]
+# 训练前后都用这 6 个题目各写 1 首，好对比：3 个五言、3 个七言
+fixed = by_genre["五言绝句"][:3] + by_genre["七言绝句"][:3]
 print("\n训练前：")
 for t, g in fixed:
     _, _, p = write(t, g, 1, 1234)
     print(f"  {t}（{g}）：{p[0][:40]!r}  得分 {reward_of(p[0], g):.2f}")
 
 # ---------- 训练：每一步 6 个环节 ----------
-print("\nstep 平均分 全对 |  时间 ms：1挑题目 2写诗 3打分 4猜下一个字 5算梯度 6改参数  合计 | 显存 MB")
+print("\nstep 体裁 平均分 全对 |  时间 ms：1挑题目 2写诗 3打分 4猜下一个字 5算梯度 6改参数  合计 | 显存 MB")
 gen = torch.Generator().manual_seed(0)
-ms, scores, full = [], [], []
+ms, scores, full, genres = [], [], [], []
 torch.cuda.reset_peak_memory_stats()
 for step in range(1, STEPS + 1):
     t0 = now()
-    # 环节 1：挑题目。随机挑 1 个
-    title, genre = items[torch.randint(len(items), (1,), generator=gen).item()]
+    # 环节 1：挑题目。随机挑 1 个（BALANCE=True 时，单数步挑五言，双数步挑七言）
+    pool = by_genre["五言绝句" if step % 2 else "七言绝句"] if BALANCE else items
+    title, genre = pool[torch.randint(len(pool), (1,), generator=gen).item()]
     t1 = now()
 
     # 环节 2：写诗。同一个题目写 G 首（这就是推理：一次写一个 token，不算梯度）
@@ -138,7 +141,8 @@ for step in range(1, STEPS + 1):
     ms.append(d)
     scores.append(r.mean().item())
     full.append((r == 1).float().mean().item())
-    print(f"{step:>4} {scores[-1]:5.2f} {full[-1]:4.0%} | {d[0]:6.1f} {d[1]:7.0f} {d[2]:5.1f} {d[3]:8.1f} {d[4]:7.1f} {d[5]:6.1f}"
+    genres.append(genre)
+    print(f"{step:>4}  {genre[:2]}  {scores[-1]:5.2f} {full[-1]:4.0%} | {d[0]:6.1f} {d[1]:7.0f} {d[2]:5.1f} {d[3]:8.1f} {d[4]:7.1f} {d[5]:6.1f}"
           f"  {sum(d):6.0f} | {torch.cuda.max_memory_allocated() / MB:6.0f}")
     if step % SHOW_EVERY == 0:
         best = int(r.argmax())
@@ -148,6 +152,11 @@ for step in range(1, STEPS + 1):
 k = min(10, STEPS)
 print(f"\n平均分：前 {k} 步 {sum(scores[:k]) / k:.2f} → 最后 {k} 步 {sum(scores[-k:]) / k:.2f}")
 print(f"全对的比例：前 {k} 步 {sum(full[:k]) / k:.0%} → 最后 {k} 步 {sum(full[-k:]) / k:.0%}")
+half = STEPS // 2
+print(f"后一半 {STEPS - half} 步，按体裁分开看平均分（上面两行只看最后 10 步，那 10 步可能碰巧全是七言题目，所以这里分开看）：")
+for g in ("五言绝句", "七言绝句"):
+    sc = [x for x, y in zip(scores[half:], genres[half:]) if y == g]
+    print(f"  {g}：{len(sc)} 步，平均分 {sum(sc) / len(sc):.2f}" if sc else f"  {g}：0 步")
 rest = ms[1:] if len(ms) > 1 else ms
 avg = [sum(c) / len(rest) for c in zip(*rest)]
 names = ["1 挑题目", "2 写诗", "3 打分", "4 猜下一个字", "5 算梯度", "6 改参数"]
@@ -157,7 +166,7 @@ for n, a in zip(names, avg):
 print(f"  合计：{sum(avg):7.1f} ms")
 print(f"显存峰值 {torch.cuda.max_memory_allocated() / MB:.0f} MB")
 
-print("\n训练后（同样 5 个题目、同样的随机种子）：")
+print("\n训练后（同样 6 个题目、同样的随机种子）：")
 for t, g in fixed:
     _, _, p = write(t, g, 1, 1234)
     print(f"  {t}（{g}）：{p[0][:40]!r}  得分 {reward_of(p[0], g):.2f}")

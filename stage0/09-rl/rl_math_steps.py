@@ -52,9 +52,9 @@ def mem():
 
 
 # ---------- 出题和打分：检查程序 ----------
-def make(rng, op):
-    """出一道题：两个 10～99 的数。返回题目文字和正确答案。"""
-    a, b = rng.randint(10, 99), rng.randint(10, 99)
+def make(rng, op, big=False):
+    """出一道题：两个 10～99 的数（big=True 时，第一个数是 100～999）。返回题目文字和正确答案。"""
+    a, b = rng.randint(100, 999) if big else rng.randint(10, 99), rng.randint(10, 99)
     return f"{a}{op}{b}=", (a + b if op == "+" else a * b)
 
 
@@ -122,9 +122,12 @@ def write(prompts, n, sample, seed=0):
     return out, P, texts
 
 
-# 训练前后考同样 100 道题（加法 50 道、乘法 50 道）
+# 训练前后考同样的题：加法 50 道、乘法 50 道，都是训练时没出过的题（推测：随机出，可能碰巧有几道一样）
+# 再加 50 道「三位数 × 两位数」：训练时一道也没练过这么长的。学会了规律，才做得对
 test_rng = random.Random(1234)
 test = {op: [make(test_rng, op) for _ in range(TEST_N)] for op in OPS}
+if "×" in OPS:
+    test["三位数×两位数（没练过）"] = [make(test_rng, "×", big=True) for _ in range(TEST_N)]
 
 
 def exam(when):

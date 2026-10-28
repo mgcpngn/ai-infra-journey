@@ -1,0 +1,355 @@
+<title>一道题的 RL</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=ZCOOL+XiaoWei&family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* 版式：一张批改中的考卷。上面是模型（4 个答案的概率），中间是一组 16 个答案（红笔批改），下面是自动跑很多步的曲线。 */
+:root {
+  --paper: #f6f7f2;
+  --grid: #e3e7dc;
+  --card: #ffffff;
+  --ink: #1d2a3a;
+  --muted: #5e6b78;
+  --line: #cfd6cc;
+  --blue: #2457a6;
+  --red: #c4302b;
+  --green: #2f7d4a;
+  --gold: #b07a12;
+  --chip-ok: #e6f2ea;
+  --chip-bad: #f8e7e5;
+  --chip: #eef1f5;
+  --display: "ZCOOL XiaoWei", "Noto Serif SC", "Songti SC", serif;
+  --body: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --paper: #161b22; --grid: #1e252e; --card: #1f2630; --ink: #e6ebf0; --muted: #9aa6b2; --line: #333d49;
+  --blue: #7ea8f0; --red: #f07a70; --green: #6cc48a; --gold: #e0b44e;
+  --chip-ok: #1d3326; --chip-bad: #3a2220; --chip: #27303b; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --paper: #161b22; --grid: #1e252e; --card: #1f2630; --ink: #e6ebf0; --muted: #9aa6b2; --line: #333d49;
+  --blue: #7ea8f0; --red: #f07a70; --green: #6cc48a; --gold: #e0b44e;
+  --chip-ok: #1d3326; --chip-bad: #3a2220; --chip: #27303b; color-scheme: dark }
+
+* { box-sizing: border-box }
+body {
+  background: var(--paper);
+  background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 24px 24px;
+  color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 24px 48px;
+}
+main { max-width: 960px; margin: 0 auto; display: grid; gap: 20px }
+h1 { font-family: var(--display); font-weight: 400; font-size: 2.2rem; margin: 0; text-wrap: balance }
+h2 { font-family: var(--display); font-weight: 400; font-size: 1.35rem; margin: 0; text-wrap: balance }
+p { margin: 0; max-width: 65ch }
+.muted { color: var(--muted) }
+.mono, .num { font-family: var(--mono); font-variant-numeric: tabular-nums }
+section { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 18px; display: grid; gap: 14px; min-width: 0 }
+.head { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: baseline; justify-content: space-between }
+.tag { font-size: .78rem; letter-spacing: .06em; color: var(--muted) }
+
+/* 模型 */
+.q { font-family: var(--mono); font-size: 1.6rem; font-weight: 600 }
+.bars { display: grid; gap: 10px }
+.bar { display: grid; grid-template-columns: 3.2em 1fr 4.2em 5.6em; gap: 10px; align-items: center }
+.bar .ans { font-family: var(--mono); font-weight: 600; font-size: 1.1rem }
+.bar .ans.ok { color: var(--green) }
+.track { position: relative; height: 22px; background: var(--chip); border-radius: 3px; overflow: hidden }
+.fill { position: absolute; inset: 0 auto 0 0; background: var(--blue); transition: width .5s ease }
+.fill.ok { background: var(--green) }
+.ghost { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--ink); opacity: .55; transition: left .5s ease }
+.bar .pct { font-family: var(--mono); text-align: right }
+.bar .w { font-family: var(--mono); font-size: .82rem; color: var(--muted); text-align: right }
+
+.controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center }
+.controls label { display: flex; gap: 8px; align-items: center; font-size: .9rem }
+input[type=range] { width: 120px; accent-color: var(--blue) }
+select { font: inherit; padding: 3px 6px; border-radius: 4px; border: 1px solid var(--line); background: var(--card); color: var(--ink) }
+
+button { font: inherit; font-size: .92rem; cursor: pointer; border-radius: 4px; padding: 7px 13px; border: 1px solid var(--line); background: var(--card); color: var(--ink) }
+button:hover { border-color: var(--blue) }
+button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px }
+button.primary { background: var(--blue); border-color: var(--blue); color: var(--card); font-weight: 500 }
+button:disabled { opacity: .45; cursor: default }
+.btns { display: flex; flex-wrap: wrap; gap: 8px }
+
+/* 环节 */
+.stages { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px }
+.stage { border: 1px dashed var(--line); border-radius: 4px; padding: 8px 10px; font-size: .86rem; color: var(--muted) }
+.stage b { display: block; font-weight: 500 }
+.stage.on { border-style: solid; border-color: var(--blue); color: var(--ink) }
+.stage.done { border-style: solid; color: var(--ink) }
+
+.chips { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px }
+.chip { position: relative; display: grid; gap: 1px; justify-items: center; padding: 6px 2px; border-radius: 4px; background: var(--chip); border: 1px solid transparent; cursor: pointer; font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--ink) }
+.chip .a { font-size: 1.05rem; font-weight: 600 }
+.chip .s, .chip .d { font-size: .78rem; min-height: 1.2em }
+.chip.ok { background: var(--chip-ok) } .chip.bad { background: var(--chip-bad) }
+.chip .s.ok { color: var(--green) } .chip .s.bad { color: var(--red) }
+.chip .d.pos { color: var(--green); font-weight: 600 } .chip .d.neg { color: var(--red) } .chip .d.zero { color: var(--muted) }
+.chip .mark { position: absolute; top: -2px; right: 4px; font-family: var(--display); font-size: 1.2rem; color: var(--red) }
+
+.note { border-left: 3px solid var(--gold); padding: 8px 12px; background: var(--chip); border-radius: 0 4px 4px 0; font-size: .92rem }
+.note.zero { border-left-color: var(--red) }
+table { border-collapse: collapse; width: 100%; font-size: .9rem }
+th, td { padding: 5px 8px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap }
+th:first-child, td:first-child { text-align: left }
+th { font-weight: 500; color: var(--muted); font-size: .82rem }
+.scroll { overflow-x: auto }
+td.pos { color: var(--green); font-weight: 600 } td.neg { color: var(--red) }
+
+canvas { width: 100%; height: 220px; display: block }
+.stats { display: flex; flex-wrap: wrap; gap: 8px 24px; font-size: .92rem }
+.stats .num { font-weight: 600 }
+
+@media (max-width: 640px) {
+  .chips { grid-template-columns: repeat(4, 1fr) }
+  .stages { grid-template-columns: repeat(2, 1fr) }
+  .bar { grid-template-columns: 2.8em 1fr 3.6em; }
+  .bar .w { display: none }
+  h1 { font-size: 1.8rem }
+}
+@media (prefers-reduced-motion: reduce) { .fill, .ghost { transition: none } }
+</style>
+
+<main>
+  <header style="display:grid;gap:8px">
+    <h1>一道题的 RL</h1>
+    <p class="muted">和 rl_math.py 做的是同一件事，只是「模型」很小：题目 <span class="mono">37+46=</span>，只能从 4 个答案里选一个，每个答案有一个参数。点按钮，一个环节一个环节地看。</p>
+  </header>
+
+  <section aria-labelledby="m-h">
+    <div class="head"><h2 id="m-h">模型：4 个答案的概率</h2><span class="q">37+46=</span></div>
+    <div class="bars" id="bars"></div>
+    <p class="muted" style="font-size:.85rem">右边的小数是参数。概率由 4 个参数算出来：参数越大，概率越大。黑色细线是「改参数之前」的概率。只有 <b style="color:var(--green)">83</b> 是对的。</p>
+    <div class="controls">
+      <label for="start">起点
+        <select id="start">
+          <option value="0.25">像加法：83 占 25%</option>
+          <option value="0.03">像乘法：83 占 3%</option>
+          <option value="0.9">很容易：83 占 90%</option>
+        </select>
+      </label>
+      <label for="g">一组写几个
+        <select id="g"><option>4</option><option>8</option><option selected>16</option></select>
+      </label>
+      <label for="lr">学习率 <input id="lr" type="range" min="0.5" max="8" step="0.5" value="2"><span id="lr-v" class="mono">2.0</span></label>
+      <button id="reset">从起点重来</button>
+    </div>
+  </section>
+
+  <section aria-labelledby="s-h">
+    <div class="head"><h2 id="s-h">训练的一步</h2><span class="tag">点一个答案，可以换成别的答案</span></div>
+    <div class="stages" id="stages">
+      <div class="stage"><b>1 写答案</b>按概率抽签，写一组</div>
+      <div class="stage"><b>2 打分</b>对 1 分，错 0 分</div>
+      <div class="stage"><b>3 减去平均分</b>比平均好是正数</div>
+      <div class="stage"><b>4 改参数</b>正数加强，负数减弱</div>
+    </div>
+    <div class="btns">
+      <button id="write" class="primary">1 按概率写答案</button>
+      <button id="pA">自己摆：对 4 个</button>
+      <button id="pB">自己摆：全对</button>
+      <button id="pC">自己摆：全错</button>
+    </div>
+    <div class="chips" id="chips"></div>
+    <div class="btns">
+      <button id="next" class="primary" disabled>下一个环节</button>
+      <button id="all" disabled>这一步全部做完</button>
+    </div>
+    <div id="explain" class="note">先点「按概率写答案」，或者用「自己摆」放好一组答案。</div>
+    <div class="scroll" id="tbl-wrap" hidden><table id="tbl"></table></div>
+  </section>
+
+  <section aria-labelledby="r-h">
+    <div class="head"><h2 id="r-h">自动跑很多步</h2><span class="tag">每一步都是上面 4 个环节</span></div>
+    <div class="btns">
+      <button id="run50" class="primary">跑 50 步</button>
+      <button id="run1">跑 1 步</button>
+      <button id="stop" disabled>停</button>
+    </div>
+    <canvas id="chart" aria-label="83 的概率随步数变化"></canvas>
+    <div class="stats">
+      <span>已经跑了 <span class="num" id="st-n">0</span> 步</span>
+      <span>83 的概率 <span class="num" id="st-p">25%</span></span>
+      <span>全对或全错、什么也学不到 <span class="num" id="st-z">0</span> 步</span>
+    </div>
+    <p class="muted" style="font-size:.88rem">试一试：起点选「像乘法：83 占 3%」，一组写 16 个，跑 50 步，看「什么也学不到」有多少步。再把「一组写几个」改成 4，从起点重来，再跑。这就是你的 rl_math.py 里 79 / 100 步学不到的原因。</p>
+  </section>
+</main>
+
+<script>
+const ANS = ["83", "84", "73", "93"];
+const OK = 0;
+const $ = id => document.getElementById(id);
+let w = [0, 0, 0, 0], old = null;
+let group = [], stage = 0;       // stage：0 还没写，1 写好，2 打好分，3 减好平均分，4 改好参数
+let hist = [], zeroSteps = 0, timer = null;
+
+const probs = v => { const m = Math.max(...v), e = v.map(x => Math.exp(x - m)), s = e.reduce((a, b) => a + b); return e.map(x => x / s) };
+const G = () => +$("g").value;
+const LR = () => +$("lr").value;
+const fmt = (x, d = 2) => (x > 0 ? "+" : x < 0 ? "−" : "") + Math.abs(x).toFixed(d);
+const pct = p => (p * 100 >= 10 || p === 0 ? (p * 100).toFixed(0) : (p * 100).toFixed(1)) + "%";
+
+function startW() {
+  const p = +$("start").value, q = (1 - p) / 3;          // 83 占 p，另外 3 个平分剩下的
+  return [Math.log(p), Math.log(q), Math.log(q), Math.log(q)];
+}
+function sample() {
+  const p = probs(w); let r = Math.random(), i = 0;
+  while (i < 3 && (r -= p[i]) > 0) i++;
+  return i;
+}
+
+function drawBars() {
+  const p = probs(w), po = old ? probs(old) : null;
+  $("bars").innerHTML = ANS.map((a, i) => `
+    <div class="bar">
+      <span class="ans ${i === OK ? "ok" : ""}">${a}</span>
+      <div class="track"><div class="fill ${i === OK ? "ok" : ""}" style="width:${p[i] * 100}%"></div>
+        ${po ? `<div class="ghost" style="left:calc(${po[i] * 100}% - 1px)"></div>` : ""}</div>
+      <span class="pct">${pct(p[i])}</span>
+      <span class="w">参数 ${w[i].toFixed(2)}</span>
+    </div>`).join("");
+}
+
+function scores() { return group.map(i => i === OK ? 1 : 0) }
+function mean() { const r = scores(); return r.reduce((a, b) => a + b, 0) / r.length }
+
+function drawChips() {
+  const r = scores(), m = mean();
+  $("chips").innerHTML = group.map((i, k) => {
+    const s = r[k], d = s - m;
+    const sc = stage >= 2 ? `<span class="s ${s ? "ok" : "bad"}">${s} 分</span>` : `<span class="s"></span>`;
+    const dc = stage >= 3 ? `<span class="d ${Math.abs(d) < 1e-9 ? "zero" : d > 0 ? "pos" : "neg"}">${Math.abs(d) < 1e-9 ? "0" : fmt(d)}</span>` : `<span class="d"></span>`;
+    const mk = stage >= 2 ? `<span class="mark">${s ? "✓" : "✗"}</span>` : "";
+    return `<button class="chip ${stage >= 2 ? (s ? "ok" : "bad") : ""}" data-k="${k}" aria-label="第 ${k + 1} 个答案 ${ANS[i]}">${mk}<span class="a">${ANS[i]}</span>${sc}${dc}</button>`;
+  }).join("");
+  [...$("stages").children].forEach((el, k) => {
+    el.classList.toggle("done", k < stage);
+    el.classList.toggle("on", k === stage && group.length > 0 && stage < 4);
+  });
+  $("next").disabled = $("all").disabled = !group.length || stage >= 4;
+  $("next").textContent = stage >= 4 ? "这一步做完了" : ["", "2 打分", "3 减去平均分", "4 改参数"][stage] || "下一个环节";
+}
+
+// 每个答案的参数改多少 = 学习率 × （这个答案每次出现时「减去平均分以后」的数加起来）÷ 一组几个
+function deltas() {
+  const r = scores(), m = mean(), d = [0, 0, 0, 0];
+  group.forEach((i, k) => d[i] += r[k] - m);
+  return d.map(x => LR() * x / group.length);
+}
+
+function explain() {
+  const n = group.length, r = scores(), m = mean(), right = r.filter(x => x).length;
+  const ex = $("explain"), tw = $("tbl-wrap");
+  ex.classList.remove("zero"); tw.hidden = true;
+  if (!n) { ex.textContent = "先点「按概率写答案」，或者用「自己摆」放好一组答案。"; return }
+  if (stage === 1) ex.innerHTML = `模型写了 ${n} 个答案。概率大的答案，写出来的次数多。点「2 打分」。`;
+  if (stage === 2) ex.innerHTML = `检查程序打分：对了 ${right} 个，错了 ${n - right} 个。平均分 = ${right} ÷ ${n} = <b class="mono">${m.toFixed(2)}</b>。点「3 减去平均分」。`;
+  if (stage === 3) {
+    if (right === 0 || right === n) {
+      ex.classList.add("zero");
+      ex.innerHTML = `${right ? "全对" : "全错"}：每个答案都是 ${right ? 1 : 0} − ${m.toFixed(2)} = <b>0</b>。没有「比这一组好」的，也没有「比这一组差」的，所以不知道往哪个方向改。点「4 改参数」看看。`;
+    } else {
+      ex.innerHTML = `对的答案：1 − ${m.toFixed(2)} = <b style="color:var(--green)">${fmt(1 - m)}</b>（比这一组平均好）。错的答案：0 − ${m.toFixed(2)} = <b style="color:var(--red)">${fmt(-m)}</b>（比平均差）。点「4 改参数」。`;
+    }
+  }
+  if (stage === 4) {
+    const d = deltas();
+    const cnt = ANS.map((_, i) => group.filter(x => x === i).length);
+    $("tbl").innerHTML = `<tr><th>答案</th><th>写了几次</th><th>减去平均分以后，加起来</th><th>参数改多少（× 学习率 ${LR()} ÷ ${n}）</th><th>概率</th></tr>` +
+      ANS.map((a, i) => {
+        const sum = cnt[i] ? cnt[i] * ((i === OK ? 1 : 0) - m) : 0, cls = d[i] > 1e-9 ? "pos" : d[i] < -1e-9 ? "neg" : "";
+        return `<tr><td class="mono">${a}</td><td class="num">${cnt[i]}</td><td class="num">${cnt[i] ? fmt(sum) : "—"}</td><td class="num ${cls}">${fmt(d[i], 3)}</td><td class="num">${pct(probs(old)[i])} → ${pct(probs(w)[i])}</td></tr>`;
+      }).join("");
+    tw.hidden = false;
+    if (right === 0 || right === n) {
+      ex.classList.add("zero");
+      ex.innerHTML = `每个参数都改了 0，概率没有变。这一步写了 ${n} 个答案，但是什么也没学到。`;
+    } else {
+      ex.innerHTML = `对的答案参数变大，错的变小，所以 83 的概率从 ${pct(probs(old)[OK])} 变成 ${pct(probs(w)[OK])}。<br>没写过的答案，参数不变；但是别的参数变了，它的概率也会跟着变一点。再点「1 按概率写答案」做下一步。`;
+    }
+  }
+}
+
+function setGroup(g) { group = g; stage = 1; old = null; drawBars(); drawChips(); explain() }
+function advance() {
+  if (stage === 3) { old = w.slice(); const d = deltas(); w = w.map((x, i) => x + d[i]); afterUpdate(); }
+  stage++; drawBars(); drawChips(); explain();
+}
+function afterUpdate() {
+  const r = scores(); if (r.every(x => x === r[0])) zeroSteps++;
+  hist.push(probs(w)[OK]); drawChart(); stats();
+}
+
+function stats() {
+  $("st-n").textContent = hist.length - 1;
+  $("st-p").textContent = pct(probs(w)[OK]);
+  $("st-z").textContent = zeroSteps;
+}
+
+function drawChart() {
+  const c = $("chart"), dpr = window.devicePixelRatio || 1, W = c.clientWidth, H = c.clientHeight;
+  c.width = W * dpr; c.height = H * dpr;
+  const x = c.getContext("2d"); x.scale(dpr, dpr);
+  const cs = getComputedStyle(document.documentElement);
+  const ink = cs.getPropertyValue("--muted").trim(), line = cs.getPropertyValue("--line").trim(), green = cs.getPropertyValue("--green").trim();
+  const L = 40, R = 12, T = 10, B = 26, n = Math.max(hist.length - 1, 10);
+  x.font = "12px " + cs.getPropertyValue("--mono"); x.fillStyle = ink; x.strokeStyle = line; x.lineWidth = 1;
+  for (const v of [0, .25, .5, .75, 1]) {
+    const y = T + (1 - v) * (H - T - B);
+    x.beginPath(); x.moveTo(L, y); x.lineTo(W - R, y); x.stroke();
+    x.textAlign = "right"; x.textBaseline = "middle"; x.fillText(v * 100 + "%", L - 6, y);
+  }
+  x.textAlign = "center"; x.textBaseline = "top";
+  const step = n <= 20 ? 5 : n <= 60 ? 10 : n <= 150 ? 25 : 50;
+  for (let s = 0; s <= n; s += step) x.fillText(s, L + s / n * (W - L - R), H - B + 6);
+  if (hist.length < 1) return;
+  const px = i => L + i / n * (W - L - R), py = v => T + (1 - v) * (H - T - B);
+  x.strokeStyle = green; x.lineWidth = 2; x.beginPath();
+  hist.forEach((v, i) => i ? x.lineTo(px(i), py(v)) : x.moveTo(px(i), py(v))); x.stroke();
+  x.fillStyle = green; x.beginPath(); x.arc(px(hist.length - 1), py(hist[hist.length - 1]), 4, 0, 7); x.fill();
+  x.fillStyle = ink; x.textAlign = "left"; x.textBaseline = "top"; x.fillText("83 的概率", L + 6, T + 2);
+}
+
+function quickStep() {
+  setGroup(Array.from({ length: G() }, sample));
+  stage = 3; advance();
+}
+function reset() {
+  stopRun(); w = startW(); old = null; group = []; stage = 0; hist = [probs(w)[OK]]; zeroSteps = 0;
+  drawBars(); drawChips(); explain(); drawChart(); stats();
+}
+function stopRun() { if (timer) clearInterval(timer); timer = null; $("stop").disabled = true; $("run50").disabled = false }
+
+$("write").onclick = () => setGroup(Array.from({ length: G() }, sample));
+const preset = right => { const n = G(), k = Math.round(n * right); setGroup(Array.from({ length: n }, (_, i) => i < k ? OK : 1 + (i % 3))) };
+$("pA").onclick = () => preset(.25);
+$("pB").onclick = () => preset(1);
+$("pC").onclick = () => preset(0);
+$("next").onclick = advance;
+$("all").onclick = () => { while (stage < 4) advance() };
+$("chips").onclick = e => {
+  const b = e.target.closest(".chip"); if (!b) return;
+  const k = +b.dataset.k; group[k] = (group[k] + 1) % 4;
+  if (stage >= 4) { stage = 1; old = null; drawBars() }
+  drawChips(); explain();
+};
+$("lr").oninput = () => { $("lr-v").textContent = (+$("lr").value).toFixed(1); if (stage === 4) explain() };
+$("start").onchange = reset;
+$("g").onchange = reset;
+$("reset").onclick = reset;
+$("run1").onclick = quickStep;
+$("run50").onclick = () => {
+  let left = 50; $("stop").disabled = false; $("run50").disabled = true;
+  timer = setInterval(() => { quickStep(); if (--left <= 0) stopRun() }, 90);
+};
+$("stop").onclick = stopRun;
+addEventListener("resize", drawChart);
+reset();
+</script>

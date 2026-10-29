@@ -97,11 +97,15 @@ test_rng = random.Random(1234)
 test = {op: [make(test_rng, op) for _ in range(TEST_N)] for op in OPS}
 
 
+EXAM = {}   # 记下每次考试对了几道，最后放在一起打印
+
+
 def exam(when):
     print(f"\n{when}考试（每种题 {TEST_N} 道，不抽签）：")
     for op, qs in test.items():
         _, _, texts = write([q for q, _ in qs], 1, sample=False)
         right = [reward_of(t, a) for t, (_, a) in zip(texts, qs)]
+        EXAM.setdefault(op, {})[when] = int(sum(right))
         print(f"  {op}：对 {int(sum(right))} / {len(qs)}。前 3 道：", end="")
         print("；".join(f"{q}{t!r}（应为 {a}）" for (q, a), t in zip(qs[:3], texts[:3])))
 
@@ -179,3 +183,8 @@ print(f"  合计：{sum(avg):7.1f} ms")
 print(f"显存峰值 {torch.cuda.max_memory_allocated() / MB:.0f} MB")
 
 exam("训练后")
+
+# 训练前、训练后的考试放在一起，不用往上翻
+print("\n考试对的道数：训练前 → 训练后")
+for k, v in EXAM.items():
+    print(f"  {k}：{v['训练前']} → {v['训练后']}")

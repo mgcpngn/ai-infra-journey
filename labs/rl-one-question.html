@@ -1,3 +1,8 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>一道题的 RL</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -26,6 +31,10 @@
   --b83: #4fae6e; --b84: #5f8fd6; --b73: #a47dd0; --b93: #d49a46; color-scheme: dark }
 
 * { box-sizing: border-box }
+html { color-scheme: light }
+body { margin: 0 }
+img { max-width: 100% }
+[hidden] { display: none !important }
 body {
   background: var(--paper);
   background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
@@ -126,7 +135,8 @@ select, input[type=text] { font: inherit; padding: 5px 8px; border-radius: 4px; 
 }
 @media (prefers-reduced-motion: reduce) { .ball, .ball.new { transition: none; animation: none } }
 </style>
-
+</head>
+<body>
 <main>
   <header style="display:grid;gap:10px">
     <h1>一道题的 RL</h1>
@@ -387,3 +397,6 @@ $("ans").oninput = grade;
 document.querySelectorAll("[data-p]").forEach(b => b.onclick = () => { $("ans").value = b.dataset.p; grade() });
 grade();
 </script>
+
+</body>
+</html>

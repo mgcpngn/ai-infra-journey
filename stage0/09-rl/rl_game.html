@@ -4,352 +4,386 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=ZCOOL+XiaoWei&family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap">
 <style>
-/* 版式：一张批改中的考卷。上面是模型（4 个答案的概率），中间是一组 16 个答案（红笔批改），下面是自动跑很多步的曲线。 */
+/* 版式：一张批改中的考卷，分 3 关。第 1 关是一个装球的袋子，第 2 关是一条流水线，第 3 关是红笔逐段批改的算式。 */
 :root {
-  --paper: #f6f7f2;
-  --grid: #e3e7dc;
-  --card: #ffffff;
-  --ink: #1d2a3a;
-  --muted: #5e6b78;
-  --line: #cfd6cc;
-  --blue: #2457a6;
-  --red: #c4302b;
-  --green: #2f7d4a;
-  --gold: #b07a12;
-  --chip-ok: #e6f2ea;
-  --chip-bad: #f8e7e5;
-  --chip: #eef1f5;
+  --paper: #f6f7f2; --grid: #e3e7dc; --card: #ffffff; --ink: #1d2a3a; --muted: #5e6b78; --line: #cfd6cc;
+  --blue: #2457a6; --red: #c4302b; --green: #2f7d4a; --gold: #b07a12; --soft: #eef1f5;
+  --ok-bg: #e6f2ea; --bad-bg: #f8e7e5;
+  --b83: #2f7d4a; --b84: #3d6fb8; --b73: #8a5bb5; --b93: #c07a1e;
   --display: "ZCOOL XiaoWei", "Noto Serif SC", "Songti SC", serif;
   --body: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
   --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
   --paper: #161b22; --grid: #1e252e; --card: #1f2630; --ink: #e6ebf0; --muted: #9aa6b2; --line: #333d49;
-  --blue: #7ea8f0; --red: #f07a70; --green: #6cc48a; --gold: #e0b44e;
-  --chip-ok: #1d3326; --chip-bad: #3a2220; --chip: #27303b; color-scheme: dark } }
+  --blue: #7ea8f0; --red: #f07a70; --green: #6cc48a; --gold: #e0b44e; --soft: #27303b;
+  --ok-bg: #1d3326; --bad-bg: #3a2220;
+  --b83: #4fae6e; --b84: #5f8fd6; --b73: #a47dd0; --b93: #d49a46; color-scheme: dark } }
 :root[data-theme="dark"] {
   --paper: #161b22; --grid: #1e252e; --card: #1f2630; --ink: #e6ebf0; --muted: #9aa6b2; --line: #333d49;
-  --blue: #7ea8f0; --red: #f07a70; --green: #6cc48a; --gold: #e0b44e;
-  --chip-ok: #1d3326; --chip-bad: #3a2220; --chip: #27303b; color-scheme: dark }
+  --blue: #7ea8f0; --red: #f07a70; --green: #6cc48a; --gold: #e0b44e; --soft: #27303b;
+  --ok-bg: #1d3326; --bad-bg: #3a2220;
+  --b83: #4fae6e; --b84: #5f8fd6; --b73: #a47dd0; --b93: #d49a46; color-scheme: dark }
 
 * { box-sizing: border-box }
 body {
   background: var(--paper);
   background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
   background-size: 24px 24px;
-  color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.6;
+  color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.65;
   padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
-  padding-block: 24px 48px;
+  padding-block: 24px 56px;
 }
-main { max-width: 960px; margin: 0 auto; display: grid; gap: 20px }
+main { max-width: 920px; margin: 0 auto; display: grid; gap: 22px }
 h1 { font-family: var(--display); font-weight: 400; font-size: 2.2rem; margin: 0; text-wrap: balance }
-h2 { font-family: var(--display); font-weight: 400; font-size: 1.35rem; margin: 0; text-wrap: balance }
+h2 { font-family: var(--display); font-weight: 400; font-size: 1.45rem; margin: 0; text-wrap: balance }
+h3 { font-size: 1rem; font-weight: 700; margin: 0 }
 p { margin: 0; max-width: 65ch }
 .muted { color: var(--muted) }
-.mono, .num { font-family: var(--mono); font-variant-numeric: tabular-nums }
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums }
 section { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 18px; display: grid; gap: 14px; min-width: 0 }
-.head { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: baseline; justify-content: space-between }
-.tag { font-size: .78rem; letter-spacing: .06em; color: var(--muted) }
-
-/* 模型 */
-.q { font-family: var(--mono); font-size: 1.6rem; font-weight: 600 }
-.bars { display: grid; gap: 10px }
-.bar { display: grid; grid-template-columns: 3.2em 1fr 4.2em 5.6em; gap: 10px; align-items: center }
-.bar .ans { font-family: var(--mono); font-weight: 600; font-size: 1.1rem }
-.bar .ans.ok { color: var(--green) }
-.track { position: relative; height: 22px; background: var(--chip); border-radius: 3px; overflow: hidden }
-.fill { position: absolute; inset: 0 auto 0 0; background: var(--blue); transition: width .5s ease }
-.fill.ok { background: var(--green) }
-.ghost { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--ink); opacity: .55; transition: left .5s ease }
-.bar .pct { font-family: var(--mono); text-align: right }
-.bar .w { font-family: var(--mono); font-size: .82rem; color: var(--muted); text-align: right }
-
-.controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center }
-.controls label { display: flex; gap: 8px; align-items: center; font-size: .9rem }
-input[type=range] { width: 120px; accent-color: var(--blue) }
-select { font: inherit; padding: 3px 6px; border-radius: 4px; border: 1px solid var(--line); background: var(--card); color: var(--ink) }
+.lv { font-size: .8rem; letter-spacing: .08em; color: var(--red); font-weight: 700 }
+nav { display: flex; flex-wrap: wrap; gap: 8px }
+nav a { color: var(--blue); text-decoration: none; border: 1px solid var(--line); background: var(--card); padding: 4px 12px; border-radius: 99px; font-size: .9rem }
+nav a:hover { border-color: var(--blue) }
 
 button { font: inherit; font-size: .92rem; cursor: pointer; border-radius: 4px; padding: 7px 13px; border: 1px solid var(--line); background: var(--card); color: var(--ink) }
 button:hover { border-color: var(--blue) }
-button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px }
+button:focus-visible, select:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px }
 button.primary { background: var(--blue); border-color: var(--blue); color: var(--card); font-weight: 500 }
 button:disabled { opacity: .45; cursor: default }
-.btns { display: flex; flex-wrap: wrap; gap: 8px }
+.btns { display: flex; flex-wrap: wrap; gap: 8px; align-items: center }
+select, input[type=text] { font: inherit; padding: 5px 8px; border-radius: 4px; border: 1px solid var(--line); background: var(--card); color: var(--ink) }
 
-/* 环节 */
-.stages { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px }
-.stage { border: 1px dashed var(--line); border-radius: 4px; padding: 8px 10px; font-size: .86rem; color: var(--muted) }
-.stage b { display: block; font-weight: 500 }
-.stage.on { border-style: solid; border-color: var(--blue); color: var(--ink) }
-.stage.done { border-style: solid; color: var(--ink) }
+/* 第 1 关：袋子 */
+.l1 { display: grid; grid-template-columns: 260px 1fr; gap: 18px; align-items: start }
+.bag { position: relative; border: 2px solid var(--ink); border-radius: 22px 22px 46px 46px; padding: 22px 14px 18px; background: var(--soft) }
+.bag::before { content: "模型 = 袋子"; position: absolute; top: -12px; left: 16px; background: var(--card); padding: 0 6px; font-size: .78rem; color: var(--muted) }
+.balls { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; justify-items: center }
+.ball { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-family: var(--mono); font-size: .8rem; font-weight: 600; transition: background .4s, transform .4s }
+.ball.new { animation: pop .5s ease }
+@keyframes pop { from { transform: scale(.2) } to { transform: scale(1) } }
+.share { display: grid; gap: 3px; margin-top: 12px; font-size: .85rem }
+.share div { display: flex; justify-content: space-between }
+.k83 { background: var(--b83) } .k84 { background: var(--b84) } .k73 { background: var(--b73) } .k93 { background: var(--b93) }
 
-.chips { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px }
-.chip { position: relative; display: grid; gap: 1px; justify-items: center; padding: 6px 2px; border-radius: 4px; background: var(--chip); border: 1px solid transparent; cursor: pointer; font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--ink) }
-.chip .a { font-size: 1.05rem; font-weight: 600 }
-.chip .s, .chip .d { font-size: .78rem; min-height: 1.2em }
-.chip.ok { background: var(--chip-ok) } .chip.bad { background: var(--chip-bad) }
-.chip .s.ok { color: var(--green) } .chip .s.bad { color: var(--red) }
-.chip .d.pos { color: var(--green); font-weight: 600 } .chip .d.neg { color: var(--red) } .chip .d.zero { color: var(--muted) }
-.chip .mark { position: absolute; top: -2px; right: 4px; font-family: var(--display); font-size: 1.2rem; color: var(--red) }
+.stepper { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px }
+.st { border: 1px dashed var(--line); border-radius: 4px; padding: 6px 8px; font-size: .82rem; color: var(--muted); line-height: 1.4 }
+.st b { display: block; color: inherit }
+.st.on { border: 1px solid var(--blue); color: var(--ink) }
+.st.done { border-style: solid; color: var(--ink) }
 
-.note { border-left: 3px solid var(--gold); padding: 8px 12px; background: var(--chip); border-radius: 0 4px 4px 0; font-size: .92rem }
-.note.zero { border-left-color: var(--red) }
-table { border-collapse: collapse; width: 100%; font-size: .9rem }
-th, td { padding: 5px 8px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap }
-th:first-child, td:first-child { text-align: left }
-th { font-weight: 500; color: var(--muted); font-size: .82rem }
-.scroll { overflow-x: auto }
-td.pos { color: var(--green); font-weight: 600 } td.neg { color: var(--red) }
+.drawn { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; min-height: 92px }
+.slot { display: grid; justify-items: center; gap: 2px; padding: 6px 0; border-radius: 4px; background: var(--soft); font-family: var(--mono); font-size: .8rem }
+.slot.ok { background: var(--ok-bg) } .slot.bad { background: var(--bad-bg) }
+.slot .ball { width: 32px; height: 32px }
+.slot .mk { font-family: var(--display); font-size: 1.1rem; line-height: 1; min-height: 1.1em }
+.slot .mk.ok { color: var(--green) } .slot .mk.bad { color: var(--red) }
+.slot .df { min-height: 1.2em; font-weight: 600 }
+.df.pos { color: var(--green) } .df.neg { color: var(--red) } .df.zero { color: var(--muted) }
 
-canvas { width: 100%; height: 220px; display: block }
-.stats { display: flex; flex-wrap: wrap; gap: 8px 24px; font-size: .92rem }
-.stats .num { font-weight: 600 }
+.say { border-left: 3px solid var(--gold); padding: 10px 14px; background: var(--soft); border-radius: 0 4px 4px 0 }
+.say.red { border-left-color: var(--red) } .say.green { border-left-color: var(--green) }
+.tally { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px }
+.tally div { background: var(--soft); border-radius: 4px; padding: 8px 10px; font-size: .85rem }
+.tally .n { font-family: var(--mono); font-size: 1.4rem; font-weight: 600; display: block }
+.why { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px }
+.why > div { border: 1px solid var(--line); border-radius: 4px; padding: 12px; display: grid; gap: 6px; align-content: start }
+.why .t { font-weight: 700 }
 
-@media (max-width: 640px) {
-  .chips { grid-template-columns: repeat(4, 1fr) }
-  .stages { grid-template-columns: repeat(2, 1fr) }
-  .bar { grid-template-columns: 2.8em 1fr 3.6em; }
-  .bar .w { display: none }
+/* 第 2 关：流水线 */
+.pipe { display: flex; width: 100%; height: 46px; border-radius: 4px; overflow: hidden; border: 1px solid var(--line) }
+.pipe div { display: grid; place-items: center; font-size: .78rem; color: #fff; white-space: nowrap; overflow: hidden; cursor: pointer; transition: filter .2s }
+.pipe div.lit { filter: brightness(1.25) }
+.stations { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px }
+.station { border: 1px solid var(--line); border-radius: 4px; padding: 10px; display: grid; gap: 4px; cursor: pointer; text-align: left; background: var(--card) }
+.station.lit { border-color: var(--blue); background: var(--soft) }
+.station .nm { font-weight: 700 }
+.station .ms { font-family: var(--mono); font-size: .82rem; color: var(--muted) }
+.station .bg { font-size: .85rem }
+
+/* 第 3 关：批改算式 */
+.cmp { display: grid; grid-template-columns: 1fr 1fr; gap: 12px }
+.paper { border: 1px solid var(--line); border-radius: 4px; padding: 12px; display: grid; gap: 8px; align-content: start }
+.segs { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-family: var(--mono) }
+.seg { padding: 4px 8px; border-radius: 4px; background: var(--soft); display: grid; justify-items: center; line-height: 1.3 }
+.seg small { font-size: .72rem; color: var(--muted) }
+.seg.ok { background: var(--ok-bg) } .seg.bad { background: var(--bad-bg) } .seg.skip { opacity: .5 }
+.seg .mk { font-family: var(--display); font-size: 1rem }
+.seg.ok .mk { color: var(--green) } .seg.bad .mk { color: var(--red) }
+.score { font-family: var(--display); font-size: 1.8rem; line-height: 1 }
+.score.ok { color: var(--green) } .score.bad { color: var(--red) }
+.qline { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-family: var(--mono); font-size: 1.05rem }
+.qline input { flex: 1 1 260px; min-width: 0; font-family: var(--mono) }
+
+@media (max-width: 700px) {
+  .l1 { grid-template-columns: 1fr }
+  .bag { max-width: 300px }
+  .drawn { grid-template-columns: repeat(4, 1fr) }
+  .stepper, .why, .stations, .cmp { grid-template-columns: 1fr }
+  .stepper { grid-template-columns: repeat(2, 1fr) }
   h1 { font-size: 1.8rem }
 }
-@media (prefers-reduced-motion: reduce) { .fill, .ghost { transition: none } }
+@media (prefers-reduced-motion: reduce) { .ball, .ball.new { transition: none; animation: none } }
 </style>
 
 <main>
-  <header style="display:grid;gap:8px">
+  <header style="display:grid;gap:10px">
     <h1>一道题的 RL</h1>
-    <p class="muted">和 rl_math.py 做的是同一件事，只是「模型」很小：题目 <span class="mono">37+46=</span>，只能从 4 个答案里选一个，每个答案有一个参数。点按钮，一个环节一个环节地看。</p>
+    <p class="muted">不看代码。3 关，每关点着玩。</p>
+    <nav><a href="#lv1">第 1 关 袋子摸球</a><a href="#lv2">第 2 关 训练的一步</a><a href="#lv3">第 3 关 9b 和 9c</a></nav>
   </header>
 
-  <section aria-labelledby="m-h">
-    <div class="head"><h2 id="m-h">模型：4 个答案的概率</h2><span class="q">37+46=</span></div>
-    <div class="bars" id="bars"></div>
-    <p class="muted" style="font-size:.85rem">右边的小数是参数。概率由 4 个参数算出来：参数越大，概率越大。黑色细线是「改参数之前」的概率。只有 <b style="color:var(--green)">83</b> 是对的。</p>
-    <div class="controls">
-      <label for="start">起点
-        <select id="start">
-          <option value="0.25">像加法：83 占 25%</option>
-          <option value="0.03">像乘法：83 占 3%</option>
-          <option value="0.9">很容易：83 占 90%</option>
-        </select>
-      </label>
-      <label for="g">一组写几个
-        <select id="g"><option>4</option><option>8</option><option selected>16</option></select>
-      </label>
-      <label for="lr">学习率 <input id="lr" type="range" min="0.5" max="8" step="0.5" value="2"><span id="lr-v" class="mono">2.0</span></label>
-      <button id="reset">从起点重来</button>
+  <!-- ====================== 第 1 关 ====================== -->
+  <section id="lv1">
+    <span class="lv">第 1 关</span>
+    <h2>袋子摸球：模型是怎么变好的</h2>
+    <p>题目是 <b class="mono">37+46=</b>。模型就是一个袋子，里面有 20 个球。每个球上写着一个答案，只有 <b style="color:var(--b83)">83</b> 是对的。模型「写一个答案」，就是从袋子里摸一个球。</p>
+
+    <div class="l1">
+      <div>
+        <div class="bag"><div class="balls" id="balls"></div><div class="share" id="share"></div></div>
+      </div>
+      <div style="display:grid;gap:12px;min-width:0">
+        <div class="btns">
+          <label for="start">这道题对模型来说</label>
+          <select id="start">
+            <option value="0.25">一般（83 占 25%）</option>
+            <option value="0.05">很难（83 占 5%）</option>
+            <option value="0.85">很容易（83 占 85%）</option>
+          </select>
+          <button id="reset1">把袋子放回起点</button>
+        </div>
+        <div class="stepper" id="stepper">
+          <div class="st"><b>① 摸 8 次</b>写 8 个答案</div>
+          <div class="st"><b>② 老师批改</b>对 ✓，错 ✗</div>
+          <div class="st"><b>③ 和这一组比</b>比平均好，还是差</div>
+          <div class="st"><b>④ 改袋子</b>好的多放，差的拿掉</div>
+        </div>
+        <div class="drawn" id="drawn"></div>
+        <div class="btns">
+          <button id="go" class="primary">① 摸 8 次</button>
+          <button id="fake-all">让 8 个全对</button>
+          <button id="fake-none">让 8 个全错</button>
+        </div>
+        <div class="say" id="say1">点「① 摸 8 次」开始。</div>
+      </div>
     </div>
+
+    <h3 style="margin-top:6px">为什么全对时袋子不变</h3>
+    <div class="why">
+      <div><span class="t" style="color:var(--green)">有对有错</span><p>能分出哪个答案比这一组好。好的多放，差的拿掉。<b>学到了。</b></p></div>
+      <div><span class="t" style="color:var(--blue)">8 个全对</span><p>8 个都一样好，没有一个比平均好。为什么这样不要紧：全对，说明袋子里已经几乎都是 83，<b>已经会了，不用再改。</b></p></div>
+      <div><span class="t" style="color:var(--red)">8 个全错</span><p>8 个都一样差，不知道哪个方向是对的。<b>不会，又学不到</b>，这一步白做了。</p></div>
+    </div>
+    <p>不信可以试：下面让电脑替你摸 30 轮，数一数 3 种情况各有几轮。换一下上面「这道题对模型来说」，再跑。</p>
+    <div class="btns"><button id="auto" class="primary">自动摸 30 轮</button></div>
+    <div class="tally">
+      <div><span class="n" id="t-mix">0</span>有对有错（学到了）</div>
+      <div><span class="n" id="t-all">0</span>全对（已经会了）</div>
+      <div><span class="n" id="t-none">0</span>全错（白做）</div>
+    </div>
+    <div class="say red" id="say-auto">「很难」的题，大部分轮次都是全错。你的 rl_math.py 里 100 步有 79 步学不到，就是这样：乘法题对模型太难，16 个答案常常全错。</div>
   </section>
 
-  <section aria-labelledby="s-h">
-    <div class="head"><h2 id="s-h">训练的一步</h2><span class="tag">点一个答案，可以换成别的答案</span></div>
-    <div class="stages" id="stages">
-      <div class="stage"><b>1 写答案</b>按概率抽签，写一组</div>
-      <div class="stage"><b>2 打分</b>对 1 分，错 0 分</div>
-      <div class="stage"><b>3 减去平均分</b>比平均好是正数</div>
-      <div class="stage"><b>4 改参数</b>正数加强，负数减弱</div>
-    </div>
-    <div class="btns">
-      <button id="write" class="primary">1 按概率写答案</button>
-      <button id="pA">自己摆：对 4 个</button>
-      <button id="pB">自己摆：全对</button>
-      <button id="pC">自己摆：全错</button>
-    </div>
-    <div class="chips" id="chips"></div>
-    <div class="btns">
-      <button id="next" class="primary" disabled>下一个环节</button>
-      <button id="all" disabled>这一步全部做完</button>
-    </div>
-    <div id="explain" class="note">先点「按概率写答案」，或者用「自己摆」放好一组答案。</div>
-    <div class="scroll" id="tbl-wrap" hidden><table id="tbl"></table></div>
+  <!-- ====================== 第 2 关 ====================== -->
+  <section id="lv2">
+    <span class="lv">第 2 关</span>
+    <h2>训练的一步：rl_math.py 每一步做的 6 件事</h2>
+    <p>rl_math.py 每一步做的，就是第 1 关的摸球，只是袋子换成了真模型，一组摸 16 个。下面每一段的长短，是你 10-28 在 4060 上量到的时间。点一段看它做什么。</p>
+    <div class="pipe" id="pipe" role="list"></div>
+    <div class="stations" id="stations"></div>
+    <div class="btns"><button id="play" class="primary">按真实时间走一遍（放慢 2 倍）</button><span class="muted mono" id="clock"></span></div>
+    <div class="say">一步一共 1499 ms，其中 <b>写答案占 75%</b>。所以想让 RL 训练快，先要让写答案（推理）快。这就是你学推理加速（vLLM）对训练也有用的原因。</div>
   </section>
 
-  <section aria-labelledby="r-h">
-    <div class="head"><h2 id="r-h">自动跑很多步</h2><span class="tag">每一步都是上面 4 个环节</span></div>
+  <!-- ====================== 第 3 关 ====================== -->
+  <section id="lv3">
+    <span class="lv">第 3 关</span>
+    <h2>9b 和 9c：只看答案，还是每一步都查</h2>
+    <p>9b、9c 是路线图上第 9 步的两个小实验。<b>9b</b>（rl_math.py）只让模型直接写答案，老师只看答案。<b>9c</b>（rl_math_steps.py）让模型先写过程，老师用计算器把过程的每一段都算一遍。下面你当模型，写一行，看两个老师怎么批改。</p>
     <div class="btns">
-      <button id="run50" class="primary">跑 50 步</button>
-      <button id="run1">跑 1 步</button>
-      <button id="stop" disabled>停</button>
+      <span class="muted">换一个写法：</span>
+      <button data-p="37×40+37×6=1480+222=1702">过程对、答案对</button>
+      <button data-p="37×40+37×6=1480+232=1702">过程错一步、答案碰巧对</button>
+      <button data-p="1702">只写答案</button>
+      <button data-p="37×40+37×6=1480+222=1792">过程对、最后写错</button>
     </div>
-    <canvas id="chart" aria-label="83 的概率随步数变化"></canvas>
-    <div class="stats">
-      <span>已经跑了 <span class="num" id="st-n">0</span> 步</span>
-      <span>83 的概率 <span class="num" id="st-p">25%</span></span>
-      <span>全对或全错、什么也学不到 <span class="num" id="st-z">0</span> 步</span>
+    <div class="qline"><span>37×46=</span><input type="text" id="ans" value="37×40+37×6=1480+222=1702" aria-label="模型写出的部分" autocomplete="off" spellcheck="false"></div>
+    <div class="cmp">
+      <div class="paper">
+        <h3>9b 老师：只看最后的答案</h3>
+        <div class="segs" id="segs-b"></div>
+        <div class="score" id="score-b"></div>
+        <p class="muted" id="note-b" style="font-size:.88rem"></p>
+      </div>
+      <div class="paper">
+        <h3>9c 老师：每一段都用计算器算</h3>
+        <div class="segs" id="segs-c"></div>
+        <div class="score" id="score-c"></div>
+        <p class="muted" id="note-c" style="font-size:.88rem"></p>
+      </div>
     </div>
-    <p class="muted" style="font-size:.88rem">试一试：起点选「像乘法：83 占 3%」，一组写 16 个，跑 50 步，看「什么也学不到」有多少步。再把「一组写几个」改成 4，从起点重来，再跑。这就是你的 rl_math.py 里 79 / 100 步学不到的原因。</p>
+    <div class="say green">9c 只给「每一步都对」的写法加分，所以模型被加强的是<b>正确的做法</b>，不是碰巧对的数字。学会的是做法，没练过的题（比如三位数 × 两位数）也可能做对，这就是泛化。9c 还没有在 4060 上跑，跑了才知道效果。</div>
   </section>
 </main>
 
 <script>
-const ANS = ["83", "84", "73", "93"];
-const OK = 0;
+/* ---------------- 第 1 关 ---------------- */
+const KINDS = ["83", "84", "73", "93"], OK = 0, N = 20, DRAW = 8, LR = 2.5;
 const $ = id => document.getElementById(id);
-let w = [0, 0, 0, 0], old = null;
-let group = [], stage = 0;       // stage：0 还没写，1 写好，2 打好分，3 减好平均分，4 改好参数
-let hist = [], zeroSteps = 0, timer = null;
+let w, drawn = [], stage = 0, prevCounts = null;
 
 const probs = v => { const m = Math.max(...v), e = v.map(x => Math.exp(x - m)), s = e.reduce((a, b) => a + b); return e.map(x => x / s) };
-const G = () => +$("g").value;
-const LR = () => +$("lr").value;
-const fmt = (x, d = 2) => (x > 0 ? "+" : x < 0 ? "−" : "") + Math.abs(x).toFixed(d);
-const pct = p => (p * 100 >= 10 || p === 0 ? (p * 100).toFixed(0) : (p * 100).toFixed(1)) + "%";
-
-function startW() {
-  const p = +$("start").value, q = (1 - p) / 3;          // 83 占 p，另外 3 个平分剩下的
-  return [Math.log(p), Math.log(q), Math.log(q), Math.log(q)];
+function counts() {               // 20 个球按概率分给 4 种答案（最大余数法），每种至少 1 个
+  const p = probs(w), raw = p.map(x => x * N), c = raw.map(Math.floor);
+  let left = N - c.reduce((a, b) => a + b);
+  raw.map((x, i) => [x - c[i], i]).sort((a, b) => b[0] - a[0]).slice(0, left).forEach(([, i]) => c[i]++);
+  return c;
 }
-function sample() {
-  const p = probs(w); let r = Math.random(), i = 0;
-  while (i < 3 && (r -= p[i]) > 0) i++;
-  return i;
+function reset1() {
+  const p = +$("start").value, q = (1 - p) / 3;
+  w = [Math.log(p), Math.log(q), Math.log(q), Math.log(q)];
+  drawn = []; stage = 0; prevCounts = null; render1();
 }
+function sample() { const p = probs(w); let r = Math.random(), i = 0; while (i < 3 && (r -= p[i]) > 0) i++; return i }
+const mean = () => drawn.filter(i => i === OK).length / drawn.length;
 
-function drawBars() {
-  const p = probs(w), po = old ? probs(old) : null;
-  $("bars").innerHTML = ANS.map((a, i) => `
-    <div class="bar">
-      <span class="ans ${i === OK ? "ok" : ""}">${a}</span>
-      <div class="track"><div class="fill ${i === OK ? "ok" : ""}" style="width:${p[i] * 100}%"></div>
-        ${po ? `<div class="ghost" style="left:calc(${po[i] * 100}% - 1px)"></div>` : ""}</div>
-      <span class="pct">${pct(p[i])}</span>
-      <span class="w">参数 ${w[i].toFixed(2)}</span>
-    </div>`).join("");
-}
-
-function scores() { return group.map(i => i === OK ? 1 : 0) }
-function mean() { const r = scores(); return r.reduce((a, b) => a + b, 0) / r.length }
-
-function drawChips() {
-  const r = scores(), m = mean();
-  $("chips").innerHTML = group.map((i, k) => {
-    const s = r[k], d = s - m;
-    const sc = stage >= 2 ? `<span class="s ${s ? "ok" : "bad"}">${s} 分</span>` : `<span class="s"></span>`;
-    const dc = stage >= 3 ? `<span class="d ${Math.abs(d) < 1e-9 ? "zero" : d > 0 ? "pos" : "neg"}">${Math.abs(d) < 1e-9 ? "0" : fmt(d)}</span>` : `<span class="d"></span>`;
-    const mk = stage >= 2 ? `<span class="mark">${s ? "✓" : "✗"}</span>` : "";
-    return `<button class="chip ${stage >= 2 ? (s ? "ok" : "bad") : ""}" data-k="${k}" aria-label="第 ${k + 1} 个答案 ${ANS[i]}">${mk}<span class="a">${ANS[i]}</span>${sc}${dc}</button>`;
+function renderBag() {
+  const c = counts(), list = [];
+  c.forEach((n, i) => { for (let k = 0; k < n; k++) list.push(i) });
+  const prev = prevCounts ? prevCounts.slice() : null;
+  $("balls").innerHTML = list.map(i => {
+    let isNew = false;
+    if (prev && prev[i] > 0) prev[i]--; else if (prev) isNew = true;
+    return `<span class="ball k${KINDS[i]}${isNew ? " new" : ""}">${KINDS[i]}</span>`;
   }).join("");
-  [...$("stages").children].forEach((el, k) => {
-    el.classList.toggle("done", k < stage);
-    el.classList.toggle("on", k === stage && group.length > 0 && stage < 4);
-  });
-  $("next").disabled = $("all").disabled = !group.length || stage >= 4;
-  $("next").textContent = stage >= 4 ? "这一步做完了" : ["", "2 打分", "3 减去平均分", "4 改参数"][stage] || "下一个环节";
+  $("share").innerHTML = c.map((n, i) => `<div><span><span class="ball k${KINDS[i]}" style="display:inline-grid;width:14px;height:14px;font-size:0;vertical-align:-2px"></span> ${KINDS[i]}${i === OK ? "（对）" : ""}</span><span class="mono">${n} 个 = ${Math.round(n / N * 100)}%</span></div>`).join("");
 }
 
-// 每个答案的参数改多少 = 学习率 × （这个答案每次出现时「减去平均分以后」的数加起来）÷ 一组几个
-function deltas() {
-  const r = scores(), m = mean(), d = [0, 0, 0, 0];
-  group.forEach((i, k) => d[i] += r[k] - m);
-  return d.map(x => LR() * x / group.length);
+function render1() {
+  renderBag();
+  const m = drawn.length ? mean() : 0;
+  $("drawn").innerHTML = drawn.length ? drawn.map(i => {
+    const s = i === OK ? 1 : 0, d = s - m, z = Math.abs(d) < 1e-9;
+    return `<div class="slot ${stage >= 2 ? (s ? "ok" : "bad") : ""}">
+      <span class="ball k${KINDS[i]}">${KINDS[i]}</span>
+      <span class="mk ${s ? "ok" : "bad"}">${stage >= 2 ? (s ? "✓" : "✗") : ""}</span>
+      <span class="df ${stage >= 3 ? (z ? "zero" : d > 0 ? "pos" : "neg") : ""}">${stage >= 3 ? (z ? "一样" : d > 0 ? "好" : "差") : ""}</span>
+    </div>`;
+  }).join("") : `<div class="muted" style="grid-column:1/-1;align-self:center">还没有摸。</div>`;
+  [...$("stepper").children].forEach((el, k) => { el.classList.toggle("done", k < stage); el.classList.toggle("on", k === stage) });
+  $("go").textContent = ["① 摸 8 次", "② 老师批改", "③ 和这一组比", "④ 改袋子", "① 再摸 8 次"][stage];
+  say1();
 }
 
-function explain() {
-  const n = group.length, r = scores(), m = mean(), right = r.filter(x => x).length;
-  const ex = $("explain"), tw = $("tbl-wrap");
-  ex.classList.remove("zero"); tw.hidden = true;
-  if (!n) { ex.textContent = "先点「按概率写答案」，或者用「自己摆」放好一组答案。"; return }
-  if (stage === 1) ex.innerHTML = `模型写了 ${n} 个答案。概率大的答案，写出来的次数多。点「2 打分」。`;
-  if (stage === 2) ex.innerHTML = `检查程序打分：对了 ${right} 个，错了 ${n - right} 个。平均分 = ${right} ÷ ${n} = <b class="mono">${m.toFixed(2)}</b>。点「3 减去平均分」。`;
+function say1() {
+  const el = $("say1"); el.className = "say";
+  const right = drawn.filter(i => i === OK).length;
+  if (stage === 0) { el.textContent = "点「① 摸 8 次」开始。也可以直接点「让 8 个全对」或「让 8 个全错」。"; return }
+  if (stage === 1) el.innerHTML = `摸出了 8 个球。袋子里哪种球多，就容易摸到哪种。点「② 老师批改」。`;
+  if (stage === 2) el.innerHTML = `老师批改：对了 <b>${right}</b> 个，错了 <b>${8 - right}</b> 个。这一组的平均分是 ${right} ÷ 8 = <b class="mono">${(right / 8).toFixed(2)}</b>。点「③ 和这一组比」。`;
   if (stage === 3) {
-    if (right === 0 || right === n) {
-      ex.classList.add("zero");
-      ex.innerHTML = `${right ? "全对" : "全错"}：每个答案都是 ${right ? 1 : 0} − ${m.toFixed(2)} = <b>0</b>。没有「比这一组好」的，也没有「比这一组差」的，所以不知道往哪个方向改。点「4 改参数」看看。`;
-    } else {
-      ex.innerHTML = `对的答案：1 − ${m.toFixed(2)} = <b style="color:var(--green)">${fmt(1 - m)}</b>（比这一组平均好）。错的答案：0 − ${m.toFixed(2)} = <b style="color:var(--red)">${fmt(-m)}</b>（比平均差）。点「4 改参数」。`;
-    }
+    if (right === 0 || right === 8) { el.className = "say red"; el.innerHTML = `${right ? "8 个全对" : "8 个全错"}：每个球都和这一组的平均<b>一样</b>，没有「好」也没有「差」。点「④ 改袋子」看看会怎样。` }
+    else el.innerHTML = `对的球得 1 分，比平均 ${(right / 8).toFixed(2)} 高，是<b style="color:var(--green)">好</b>。错的球得 0 分，比平均低，是<b style="color:var(--red)">差</b>。点「④ 改袋子」。`;
   }
   if (stage === 4) {
-    const d = deltas();
-    const cnt = ANS.map((_, i) => group.filter(x => x === i).length);
-    $("tbl").innerHTML = `<tr><th>答案</th><th>写了几次</th><th>减去平均分以后，加起来</th><th>参数改多少（× 学习率 ${LR()} ÷ ${n}）</th><th>概率</th></tr>` +
-      ANS.map((a, i) => {
-        const sum = cnt[i] ? cnt[i] * ((i === OK ? 1 : 0) - m) : 0, cls = d[i] > 1e-9 ? "pos" : d[i] < -1e-9 ? "neg" : "";
-        return `<tr><td class="mono">${a}</td><td class="num">${cnt[i]}</td><td class="num">${cnt[i] ? fmt(sum) : "—"}</td><td class="num ${cls}">${fmt(d[i], 3)}</td><td class="num">${pct(probs(old)[i])} → ${pct(probs(w)[i])}</td></tr>`;
-      }).join("");
-    tw.hidden = false;
-    if (right === 0 || right === n) {
-      ex.classList.add("zero");
-      ex.innerHTML = `每个参数都改了 0，概率没有变。这一步写了 ${n} 个答案，但是什么也没学到。`;
-    } else {
-      ex.innerHTML = `对的答案参数变大，错的变小，所以 83 的概率从 ${pct(probs(old)[OK])} 变成 ${pct(probs(w)[OK])}。<br>没写过的答案，参数不变；但是别的参数变了，它的概率也会跟着变一点。再点「1 按概率写答案」做下一步。`;
-    }
+    const c = counts();
+    if (right === 0 || right === 8) { el.className = "say red"; el.innerHTML = `袋子<b>没有变</b>。${right ? "全对：已经会了，不用改。" : "全错：不知道往哪边改，这一轮白做了。"}` }
+    else { el.className = "say green"; el.innerHTML = `「好」的 83 多放了几个，「差」的拿掉了几个。83 从 <b>${prevCounts[OK]}</b> 个变成 <b>${c[OK]}</b> 个，下次更容易摸到对的答案。再摸一次，看它继续变多。` }
   }
 }
 
-function setGroup(g) { group = g; stage = 1; old = null; drawBars(); drawChips(); explain() }
-function advance() {
-  if (stage === 3) { old = w.slice(); const d = deltas(); w = w.map((x, i) => x + d[i]); afterUpdate(); }
-  stage++; drawBars(); drawChips(); explain();
+function update() {               // ④ 改袋子：每种球的参数改 = 学习率 × （这种球每次摸到时，比平均好多少，加起来）÷ 8
+  const m = mean(), d = [0, 0, 0, 0];
+  drawn.forEach(i => d[i] += (i === OK ? 1 : 0) - m);
+  w = w.map((x, i) => x + LR * d[i] / drawn.length);
 }
-function afterUpdate() {
-  const r = scores(); if (r.every(x => x === r[0])) zeroSteps++;
-  hist.push(probs(w)[OK]); drawChart(); stats();
+function next1() {
+  if (stage === 0 || stage === 4) { prevCounts = null; drawn = Array.from({ length: DRAW }, sample); stage = 1 }
+  else if (stage === 3) { prevCounts = counts(); update(); stage = 4 }
+  else stage++;
+  render1();
 }
+$("go").onclick = next1;
+$("fake-all").onclick = () => { prevCounts = null; drawn = Array(DRAW).fill(OK); stage = 1; render1() };
+$("fake-none").onclick = () => { prevCounts = null; drawn = Array.from({ length: DRAW }, (_, k) => 1 + k % 3); stage = 1; render1() };
+$("start").onchange = () => { reset1(); resetTally() };
+$("reset1").onclick = () => { reset1(); resetTally() };
 
-function stats() {
-  $("st-n").textContent = hist.length - 1;
-  $("st-p").textContent = pct(probs(w)[OK]);
-  $("st-z").textContent = zeroSteps;
-}
+let tally = [0, 0, 0], timer = null;
+function resetTally() { tally = [0, 0, 0]; showTally() }
+function showTally() { $("t-mix").textContent = tally[0]; $("t-all").textContent = tally[1]; $("t-none").textContent = tally[2] }
+$("auto").onclick = () => {
+  if (timer) return;
+  let k = 0; $("auto").disabled = true;
+  timer = setInterval(() => {
+    drawn = Array.from({ length: DRAW }, sample);
+    const r = drawn.filter(i => i === OK).length;
+    tally[r === DRAW ? 1 : r === 0 ? 2 : 0]++;
+    prevCounts = counts(); update(); stage = 4; render1(); showTally();
+    if (++k >= 30) { clearInterval(timer); timer = null; $("auto").disabled = false }
+  }, 160);
+};
+reset1();
 
-function drawChart() {
-  const c = $("chart"), dpr = window.devicePixelRatio || 1, W = c.clientWidth, H = c.clientHeight;
-  c.width = W * dpr; c.height = H * dpr;
-  const x = c.getContext("2d"); x.scale(dpr, dpr);
-  const cs = getComputedStyle(document.documentElement);
-  const ink = cs.getPropertyValue("--muted").trim(), line = cs.getPropertyValue("--line").trim(), green = cs.getPropertyValue("--green").trim();
-  const L = 40, R = 12, T = 10, B = 26, n = Math.max(hist.length - 1, 10);
-  x.font = "12px " + cs.getPropertyValue("--mono"); x.fillStyle = ink; x.strokeStyle = line; x.lineWidth = 1;
-  for (const v of [0, .25, .5, .75, 1]) {
-    const y = T + (1 - v) * (H - T - B);
-    x.beginPath(); x.moveTo(L, y); x.lineTo(W - R, y); x.stroke();
-    x.textAlign = "right"; x.textBaseline = "middle"; x.fillText(v * 100 + "%", L - 6, y);
+/* ---------------- 第 2 关 ---------------- */
+const ST = [
+  { nm: "1 出题", ms: 0.0, c: "var(--muted)", bg: "出一道题，比如 61×48=", bag: "定下这一轮摸哪个袋子" },
+  { nm: "2 写答案", ms: 1130.7, c: "var(--blue)", bg: "同一道题写 16 个答案，一次写一个 token。这就是推理", bag: "= 摸 16 次球" },
+  { nm: "3 打分", ms: 0.7, c: "var(--red)", bg: "Python 算正确答案，对 1 分、错 0 分，再减去这一组的平均分", bag: "= 老师批改，再和这一组比" },
+  { nm: "4 猜下一个字", ms: 157.1, c: "var(--b73)", bg: "模型把自己写的 16 个答案再读一遍，看每个 token 当时有多大可能", bag: "= 数一数每种球摸到几次" },
+  { nm: "5 算梯度", ms: 202.3, c: "var(--b93)", bg: "算出每个参数往哪边改、改多少", bag: "= 算出每种球该多放还是拿掉" },
+  { nm: "6 改参数", ms: 8.1, c: "var(--green)", bg: "按学习率真的去改参数", bag: "= 往袋子里放球、拿球" },
+];
+const TOTAL = ST.reduce((a, s) => a + s.ms, 0);
+$("pipe").innerHTML = ST.map((s, i) => `<div role="listitem" data-i="${i}" style="flex:${Math.max(s.ms, 12)} 0 0;background:${s.c}" title="${s.nm} ${s.ms} ms">${s.ms > 120 ? s.nm : ""}</div>`).join("");
+$("stations").innerHTML = ST.map((s, i) => `<button class="station" data-i="${i}"><span class="nm">${s.nm}</span><span class="ms">${s.ms.toFixed(1)} ms，占 ${(s.ms / TOTAL * 100).toFixed(1)}%</span><span class="bg">${s.bg}</span><span class="bg muted">${s.bag}</span></button>`).join("");
+function light(i) {
+  document.querySelectorAll("#pipe div, .station").forEach(el => el.classList.toggle("lit", +el.dataset.i === i));
+}
+document.querySelectorAll("#pipe div, .station").forEach(el => el.onclick = () => light(+el.dataset.i));
+$("play").onclick = async () => {
+  $("play").disabled = true; let t = 0;
+  for (let i = 0; i < ST.length; i++) {
+    light(i);
+    const dur = Math.max(ST[i].ms * 2, 250), start = performance.now();
+    await new Promise(res => { const tick = () => { const e = performance.now() - start; $("clock").textContent = `${ST[i].nm}：${(t + Math.min(e / 2, ST[i].ms)).toFixed(0)} ms`; e < dur ? requestAnimationFrame(tick) : res() }; tick() });
+    t += ST[i].ms;
   }
-  x.textAlign = "center"; x.textBaseline = "top";
-  const step = n <= 20 ? 5 : n <= 60 ? 10 : n <= 150 ? 25 : 50;
-  for (let s = 0; s <= n; s += step) x.fillText(s, L + s / n * (W - L - R), H - B + 6);
-  if (hist.length < 1) return;
-  const px = i => L + i / n * (W - L - R), py = v => T + (1 - v) * (H - T - B);
-  x.strokeStyle = green; x.lineWidth = 2; x.beginPath();
-  hist.forEach((v, i) => i ? x.lineTo(px(i), py(v)) : x.moveTo(px(i), py(v))); x.stroke();
-  x.fillStyle = green; x.beginPath(); x.arc(px(hist.length - 1), py(hist[hist.length - 1]), 4, 0, 7); x.fill();
-  x.fillStyle = ink; x.textAlign = "left"; x.textBaseline = "top"; x.fillText("83 的概率", L + 6, T + 2);
-}
-
-function quickStep() {
-  setGroup(Array.from({ length: G() }, sample));
-  stage = 3; advance();
-}
-function reset() {
-  stopRun(); w = startW(); old = null; group = []; stage = 0; hist = [probs(w)[OK]]; zeroSteps = 0;
-  drawBars(); drawChips(); explain(); drawChart(); stats();
-}
-function stopRun() { if (timer) clearInterval(timer); timer = null; $("stop").disabled = true; $("run50").disabled = false }
-
-$("write").onclick = () => setGroup(Array.from({ length: G() }, sample));
-const preset = right => { const n = G(), k = Math.round(n * right); setGroup(Array.from({ length: n }, (_, i) => i < k ? OK : 1 + (i % 3))) };
-$("pA").onclick = () => preset(.25);
-$("pB").onclick = () => preset(1);
-$("pC").onclick = () => preset(0);
-$("next").onclick = advance;
-$("all").onclick = () => { while (stage < 4) advance() };
-$("chips").onclick = e => {
-  const b = e.target.closest(".chip"); if (!b) return;
-  const k = +b.dataset.k; group[k] = (group[k] + 1) % 4;
-  if (stage >= 4) { stage = 1; old = null; drawBars() }
-  drawChips(); explain();
+  $("clock").textContent = `走完一步：${TOTAL.toFixed(0)} ms`; light(-1); $("play").disabled = false;
 };
-$("lr").oninput = () => { $("lr-v").textContent = (+$("lr").value).toFixed(1); if (stage === 4) explain() };
-$("start").onchange = reset;
-$("g").onchange = reset;
-$("reset").onclick = reset;
-$("run1").onclick = quickStep;
-$("run50").onclick = () => {
-  let left = 50; $("stop").disabled = false; $("run50").disabled = true;
-  timer = setInterval(() => { quickStep(); if (--left <= 0) stopRun() }, 90);
-};
-$("stop").onclick = stopRun;
-addEventListener("resize", drawChart);
-reset();
+
+/* ---------------- 第 3 关 ---------------- */
+const ANSWER = 37 * 46;
+function value(expr) {
+  expr = expr.trim();
+  if (!/^\d+([+×]\d+)*$/.test(expr)) return null;
+  return expr.split("+").reduce((a, t) => a + t.split("×").reduce((p, x) => p * +x, 1), 0);
+}
+function grade() {
+  const text = $("ans").value.replace(/[x*]/g, "×");
+  const parts = text.split("=");
+  const last = parts[parts.length - 1].trim(), lastOk = /^\d+$/.test(last) && +last === ANSWER;
+  // 9b：只看最后一段
+  $("segs-b").innerHTML = parts.map((p, i) => i < parts.length - 1
+    ? `<span class="seg skip"><span>${p || "&nbsp;"}</span><small>不看</small></span><span>=</span>`
+    : `<span class="seg ${lastOk ? "ok" : "bad"}"><span>${p || "&nbsp;"}</span><span class="mk">${lastOk ? "✓" : "✗"}</span></span>`).join("");
+  $("score-b").textContent = lastOk ? "1 分" : "0 分"; $("score-b").className = "score " + (lastOk ? "ok" : "bad");
+  $("note-b").textContent = lastOk ? "最后的数是 1702，就给 1 分。前面写了什么，不管。" : "最后的数不是 1702，0 分。";
+  // 9c：每一段都算
+  const vals = parts.map(value), okEach = vals.map(v => v === ANSWER);
+  const full = parts.length >= 2 && okEach.every(Boolean) && lastOk;
+  $("segs-c").innerHTML = parts.map((p, i) => `<span class="seg ${okEach[i] ? "ok" : "bad"}"><span>${p || "&nbsp;"}</span><small>${vals[i] === null ? "看不懂" : "= " + vals[i]}</small><span class="mk">${okEach[i] ? "✓" : "✗"}</span></span>${i < parts.length - 1 ? "<span>=</span>" : ""}`).join("");
+  $("score-c").textContent = full ? "1 分" : "0 分"; $("score-c").className = "score " + (full ? "ok" : "bad");
+  let note;
+  if (full) note = "每一段算出来都是 1702，过程和答案都对，1 分。";
+  else if (parts.length < 2) note = "没有写过程，0 分。9c 要求先写过程。";
+  else if (!lastOk) note = "最后的答案不对，0 分。";
+  else note = `答案虽然对，但是有一段算出来不是 1702（红色的那段），说明过程错了，0 分。`;
+  $("note-c").textContent = note;
+}
+$("ans").oninput = grade;
+document.querySelectorAll("[data-p]").forEach(b => b.onclick = () => { $("ans").value = b.dataset.p; grade() });
+grade();
 </script>

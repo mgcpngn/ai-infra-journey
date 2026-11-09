@@ -62,7 +62,7 @@
 |---|---|---|---|---|
 | 1 月-1 | [vLLM 基线](stage1/01-vllm-baseline/) | Qwen3-0.6B，batch 1 / 64，测第一个字和每个字的时间 | batch 1 贴着天花板：卡在搬数据 | ✅ |
 | 1 月-2 | [vLLM 跑 fp8 的 Qwen](stage1/02-vllm-fp8/) | 同样的测法，换成 int8 或 fp8 权重：batch 1 每个字会不会变快、天花板变成多少、能放多少 KV cache（10-29 用户问「量化有什么意义」） | 量化在搬数据为主时才省时间：fp8 batch 1 每字 6.20 → 4.61 ms（快 26%），batch 64 只快 8%；模型 1.12 → 0.71 GiB，省下的给了 KV cache | ✅ |
-| 1 月-3 | [vLLM 把 KV cache 也转成 fp8](stage1/03-vllm-fp8-kv/) | 加 `--kv-cache-dtype fp8`：KV cache 能放的 token 会不会翻倍；batch 64 每个字会不会变快（11-09 fp8 只转了权重） | 待定 | ○ |
+| 1 月-3 | [vLLM 把 KV cache 也转成 fp8](stage1/03-vllm-fp8-kv/) | 加 `--kv-cache-dtype fp8`：KV cache 能放的 token 会不会翻倍；batch 64 每个字会不会变快（11-09 fp8 只转了权重） | token 正好 2 倍（44,928 → 89,920）；batch 64 每字 10.58 → 8.05 ms，换 Triton 和换 fp8 KV cache 各占一半；每种只跑 1 次 | ✅ |
 
 ### 第 2 月：算子与 PD 分离
 

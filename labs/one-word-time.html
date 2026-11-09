@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>写一个字要搬多少</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=ZCOOL+XiaoWei&family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* 1 月-1～1 月-3 的猜想：写一个字的时间 ≈ 要搬的字节 ÷ 每秒能搬多少。用户拖动设置，看猜想算出的时间和实测对不对得上。 */
+:root {
+  --paper: #f6f7f2; --grid: #e3e7dc; --card: #ffffff; --ink: #1d2a3a; --muted: #5e6b78; --line: #cfd6cc;
+  --blue: #2457a6; --orange: #c46a12; --red: #c4302b; --green: #2f7d4a; --soft: #eef1f5;
+  --display: "ZCOOL XiaoWei", "Noto Serif SC", serif;
+  --body: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --paper: #161b22; --grid: #1e252e; --card: #1f2630; --ink: #e6ebf0; --muted: #9aa6b2; --line: #333d49;
+  --blue: #7ea8f0; --orange: #e9a15a; --red: #f07a70; --green: #6cc48a; --soft: #27303b; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --paper: #161b22; --grid: #1e252e; --card: #1f2630; --ink: #e6ebf0; --muted: #9aa6b2; --line: #333d49;
+  --blue: #7ea8f0; --orange: #e9a15a; --red: #f07a70; --green: #6cc48a; --soft: #27303b; color-scheme: dark }
+* { box-sizing: border-box }
+body {
+  margin: 0; background: var(--paper);
+  background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 24px 24px; color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.65;
+  padding: 24px max(16px, env(safe-area-inset-right, 0px)) 56px max(16px, env(safe-area-inset-left, 0px));
+}
+main { max-width: 900px; margin: 0 auto; display: grid; gap: 22px }
+h1 { font-family: var(--display); font-weight: 400; font-size: 2.1rem; margin: 0 }
+h2 { font-family: var(--display); font-weight: 400; font-size: 1.4rem; margin: 0 }
+p { margin: 0; max-width: 68ch }
+.muted { color: var(--muted) }
+.mono { font-family: var(--mono); font-variant-numeric: tabular-nums }
+section { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 18px; display: grid; gap: 14px; min-width: 0 }
+.lv { font-size: .8rem; letter-spacing: .08em; color: var(--red); font-weight: 700 }
+a { color: var(--blue) }
+.controls { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)) }
+.ctl { border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; display: grid; gap: 6px; background: var(--soft) }
+.ctl b { font-size: .95rem }
+.seg { display: flex; gap: 6px; flex-wrap: wrap }
+.seg button { font: inherit; font-size: .9rem; cursor: pointer; border-radius: 4px; padding: 5px 12px; border: 1px solid var(--line); background: var(--card); color: var(--ink) }
+.seg button[aria-pressed="true"] { border-color: var(--blue); color: var(--blue); font-weight: 700 }
+input[type=range] { width: 100% }
+.bar { display: flex; height: 34px; border-radius: 4px; overflow: hidden; border: 1px solid var(--line); background: var(--soft) }
+.bar div { height: 100%; transition: width .25s }
+.w { background: var(--blue) } .k { background: var(--orange) }
+.legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: .9rem }
+.legend i { display: inline-block; width: 12px; height: 12px; border-radius: 2px; margin-right: 6px; vertical-align: -1px }
+.big { font-size: 1.15rem }
+table { border-collapse: collapse; width: 100%; font-size: .9rem }
+th, td { border-bottom: 1px solid var(--line); padding: 6px 8px; text-align: right }
+th:first-child, td:first-child { text-align: left }
+.scroll { overflow-x: auto }
+svg text { fill: var(--muted); font-size: 11px; font-family: var(--mono) }
+.q { border: 1px solid var(--line); border-radius: 6px; padding: 12px; display: grid; gap: 8px }
+.q .seg button.right { border-color: var(--green); color: var(--green) }
+.q .seg button.wrong { border-color: var(--red); color: var(--red) }
+.ans { border-left: 3px solid var(--blue); padding-left: 10px }
+</style>
+</head>
+<body>
+<main>
+<header style="display:grid;gap:8px">
+  <a href="../index.html">← 回到首页</a>
+  <h1>写一个字要搬多少</h1>
+  <p>1 月-1～1 月-3 的 3 个 vLLM 实验，其实只在回答一个问题：<b>写一个字，时间花在哪里？</b></p>
+  <p>猜想：写一个字的时间 ≈ <b>要从显存搬出来的字节 ÷ 每秒能搬多少</b>。你的 4060 每秒能搬 208.2 GB（10-20 用 ceiling.py 测的）。</p>
+</header>
+
+<section>
+  <div class="lv">第 1 关 · 拖一拖</div>
+  <h2>每写一个字，要搬两样东西</h2>
+  <p><b style="color:var(--blue)">权重</b>：全部参数。不管几个用户，每写一个字都搬一遍。<br>
+     <b style="color:var(--orange)">KV cache</b>：每个用户前面所有字的 K 和 V。每个用户一份，用户越多搬得越多。</p>
+  <div class="controls">
+    <div class="ctl"><b>权重每个数几个字节</b>
+      <div class="seg" id="wSeg"><button data-v="bf16" aria-pressed="true">2（bf16）</button><button data-v="fp8">1（fp8）</button></div>
+      <span class="muted mono" id="wNote"></span></div>
+    <div class="ctl"><b>KV cache 每个数几个字节</b>
+      <div class="seg" id="kSeg"><button data-v="bf16" aria-pressed="true">2（bf16）</button><button data-v="fp8">1（fp8）</button></div>
+      <span class="muted mono" id="kNote"></span></div>
+    <div class="ctl"><b>同时几个用户（batch）：<span class="mono" id="nVal">1</span></b>
+      <input type="range" id="n" min="1" max="128" value="1">
+      <span class="muted">每个用户前面平均约 127 个字（输入 63 + 写到一半 64）</span></div>
+  </div>
+  <div class="bar"><div class="w" id="barW"></div><div class="k" id="barK"></div></div>
+  <div class="legend">
+    <span><i class="w"></i>权重 <span class="mono" id="wGB"></span></span>
+    <span><i class="k"></i>KV cache <span class="mono" id="kGB"></span></span>
+  </div>
+  <p class="big">猜想算出：每个字 <b class="mono" id="pred"></b>　<span id="meas"></span></p>
+  <p class="muted" id="hint"></p>
+</section>
+
+<section>
+  <div class="lv">第 2 关 · 和你测的数对一对</div>
+  <h2>猜想对不对</h2>
+  <p>线是猜想算出来的，点是你 11-09 实测的（batch 1、4、16、64）。按第 1 关的设置切换。</p>
+  <div class="scroll"><svg id="chart" viewBox="0 0 640 300" width="100%" style="min-width:420px" role="img" aria-label="猜想和实测的每个字时间"></svg></div>
+  <div class="scroll"><table id="tbl"></table></div>
+  <div class="ans" id="verdict"></div>
+</section>
+
+<section>
+  <div class="lv">第 3 关 · 先想再点</div>
+  <h2>用猜想回答新问题</h2>
+  <p class="muted">不用算。想一想要搬的两样东西，哪样大。</p>
+  <div id="quiz" style="display:grid;gap:12px"></div>
+</section>
+
+<p class="muted">数字来源：权重字节 = 参数个数 × 每个数字节（词表那一层 155,582,464 个参数 fp8 时也不转，1 月-2 日志证实）；KV cache 每个字 = 2 × 28 层 × 8 头 × 128 × 每个数字节 = 112 KiB（bf16）；实测见 stage1/01、02、03 的 results.md。</p>
+</main>
+
+<script>
+const BW = 208.2e9, CTX = 127;
+const WB = { bf16: 1192099840, fp8: 751632384 };
+const KB = { bf16: 114688, fp8: 57344 };
+// 11-09 实测 TPOT（ms），N = 1、4、16、64
+const MEAS = {
+  "bf16|bf16": { name: "bf16 基线", v: [6.20, 6.62, 7.35, 11.49] },
+  "fp8|bf16": { name: "1 月-2 fp8 权重", v: [4.61, 4.98, 5.61, 10.58] },
+  "fp8|fp8": { name: "1 月-3 B：fp8 权重 + fp8 KV cache", v: [4.37, 4.54, 5.47, 8.05] },
+};
+const NS = [1, 4, 16, 64];
+let w = "bf16", k = "bf16", n = 1;
+const $ = id => document.getElementById(id);
+const pred = (w, k, n) => (WB[w] + n * CTX * KB[k]) / BW * 1e3;
+const gb = b => (b / 1e9).toFixed(2) + " GB";
+
+function seg(id, set) {
+  $(id).querySelectorAll("button").forEach(b => b.onclick = () => {
+    $(id).querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b));
+    set(b.dataset.v); draw();
+  });
+}
+seg("wSeg", v => w = v); seg("kSeg", v => k = v);
+$("n").oninput = e => { n = +e.target.value; draw(); };
+
+function draw() {
+  const wb = WB[w], kb = n * CTX * KB[k], max = WB.bf16 + 128 * CTX * KB.bf16;
+  $("nVal").textContent = n;
+  $("wNote").textContent = `一共 ${gb(wb)}`;
+  $("kNote").textContent = `每个字 ${KB[k] / 1024} KiB`;
+  $("barW").style.width = wb / max * 100 + "%";
+  $("barK").style.width = kb / max * 100 + "%";
+  $("wGB").textContent = gb(wb);
+  $("kGB").textContent = gb(kb);
+  $("pred").textContent = pred(w, k, n).toFixed(2) + " ms";
+  const m = MEAS[w + "|" + k], i = NS.indexOf(n);
+  $("meas").innerHTML = m && i >= 0 ? `实测 <b class="mono">${m.v[i].toFixed(2)} ms</b>` : (m ? `<span class="muted">（把用户数拖到 1、4、16 或 64 看实测）</span>` : `<span class="muted">（这种设置没测过）</span>`);
+  $("hint").textContent = kb > wb ? "现在 KV cache 比权重还大：缩小 KV cache 更有用。" : "现在权重比 KV cache 大：缩小权重更有用。";
+  chart(); table();
+}
+
+function chart() {
+  const W = 640, H = 300, L = 46, R = 14, T = 14, B = 34, xmax = 128, ymax = 14;
+  const x = v => L + v / xmax * (W - L - R), y = v => H - B - v / ymax * (H - T - B);
+  let s = "";
+  for (let t = 0; t <= ymax; t += 2) s += `<line x1="${L}" x2="${W - R}" y1="${y(t)}" y2="${y(t)}" stroke="var(--line)"/><text x="${L - 6}" y="${y(t) + 4}" text-anchor="end">${t}</text>`;
+  for (const t of [1, 16, 32, 64, 96, 128]) s += `<text x="${x(t)}" y="${H - B + 16}" text-anchor="middle">${t}</text>`;
+  s += `<text x="${(L + W - R) / 2}" y="${H - 4}" text-anchor="middle">同时几个用户</text><text x="12" y="${T + 6}">ms</text>`;
+  let d = "";
+  for (let v = 1; v <= xmax; v++) d += (v === 1 ? "M" : "L") + x(v).toFixed(1) + " " + y(pred(w, k, v)).toFixed(1);
+  s += `<path d="${d}" fill="none" stroke="var(--blue)" stroke-width="2.5"/>`;
+  const m = MEAS[w + "|" + k];
+  if (m) NS.forEach((v, i) => s += `<circle cx="${x(v)}" cy="${y(m.v[i])}" r="5" fill="var(--orange)"/>`);
+  s += `<line x1="${x(n)}" x2="${x(n)}" y1="${T}" y2="${H - B}" stroke="var(--muted)" stroke-dasharray="3 3"/>`;
+  $("chart").innerHTML = s;
+}
+
+function table() {
+  const m = MEAS[w + "|" + k];
+  let h = "<tr><th>用户数</th><th>猜想 ms</th><th>实测 ms</th><th>实测 ÷ 猜想</th></tr>";
+  NS.forEach((v, i) => {
+    const p = pred(w, k, v);
+    h += `<tr><td>${v}</td><td class="mono">${p.toFixed(2)}</td><td class="mono">${m ? m.v[i].toFixed(2) : "—"}</td><td class="mono">${m ? (m.v[i] / p).toFixed(2) : "—"}</td></tr>`;
+  });
+  $("tbl").innerHTML = h;
+  $("verdict").innerHTML = m
+    ? `<b>${m.name}</b>：实测都比猜想慢一点（多出来的推测是计算和其他开销，猜想里没有算）。但<b>变化的方向</b>都对得上：用户少时几乎只搬权重；用户多时 KV cache 变大，时间往上走。`
+    : "这种设置（权重 bf16、KV cache fp8）没测过。你可以先用猜想预测，下次再测。";
+}
+
+const QUIZ = [
+  { q: "一个聊天机器人，同时 1 个用户，每次只聊几句。想让它写字更快，先缩小哪个？", opts: ["权重", "KV cache"], a: 0,
+    why: "1 个用户、字很少时，KV cache 只有约 0.01 GB，权重有 1.19 GB。几乎全在搬权重。1 月-2 实测：fp8 权重让 batch 1 快了 26%。" },
+  { q: "一个客服系统，同时 64 个用户，每人已经聊了 2,000 个字。先缩小哪个？", opts: ["权重", "KV cache"], a: 1,
+    why: "64 × 2,000 × 112 KiB ≈ 14.7 GB，是权重的十几倍（4060 的 8 GB 根本放不下）。这时要搬的几乎全是 KV cache。" },
+  { q: "KV cache 从 bf16 换成 fp8，能同时放的字变成几倍？", opts: ["一样", "约 2 倍", "约 4 倍"], a: 1,
+    why: "每个数从 2 字节变 1 字节，每个字从 112 KiB 变 56 KiB。1 月-3 实测：44,928 → 89,920，正好 2 倍。" },
+  { q: "猜想算出 B 在 64 个用户时是 5.85 ms，实测是 8.05 ms。说明什么？", opts: ["猜想完全错了", "搬数据是主要的，但不是全部"], a: 1,
+    why: "方向都对上了，但还有约 2 ms 没算进去：计算、注意力算法本身（换 Triton 就快了 1.32 ms）等（推测）。猜想是一个好的起点，不是全部。" },
+];
+QUIZ.forEach((item, qi) => {
+  const box = document.createElement("div"); box.className = "q";
+  box.innerHTML = `<b>${qi + 1}. ${item.q}</b><div class="seg">${item.opts.map((o, i) => `<button data-i="${i}">${o}</button>`).join("")}</div><div class="ans" hidden></div>`;
+  box.querySelectorAll("button").forEach(b => b.onclick = () => {
+    const ok = +b.dataset.i === item.a;
+    box.querySelectorAll("button").forEach(x => x.classList.remove("right", "wrong"));
+    b.classList.add(ok ? "right" : "wrong");
+    const ans = box.querySelector(".ans"); ans.hidden = false;
+    ans.innerHTML = (ok ? "✅ 对。" : "❌ 再想想。") + (ok ? item.why : "");
+  });
+  $("quiz").appendChild(box);
+});
+draw();
+</script>
+</body>
+</html>

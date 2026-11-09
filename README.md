@@ -109,6 +109,7 @@ journal/         按日期的学习日志：关键领悟和被纠正的误解
 - [碗里的小球](https://mgcpngn.github.io/ai-infra-journey/labs/bowl-lr-precision.html)（[源码](labs/bowl-lr-precision.html)）：梯度和学习率（小球在碗里滚，步子大小决定走多远）；刻度尺部分看 bf16 粗刻度为什么要配一个 fp32 小本子。
 - [模型里面长什么样](https://mgcpngn.github.io/ai-infra-journey/labs/model-inside-lora.html)（[源码](labs/model-inside-lora.html)）：一张表把一组数变成另一组数；一个字走过 28 层（每层 = 注意力 + MLP）；LoRA 是并排挂在 q/k/v/o 表旁边的小路，可以关掉，也可以合并。
 - [一道题的 RL](https://mgcpngn.github.io/ai-infra-journey/labs/rl-one-question.html)（[源码](labs/rl-one-question.html)）：第 9 步。袋子摸球看模型怎么变好、全对或全错为什么学不到；rl_math.py 每一步的 6 件事和 4060 上的真实时间；9b 只看答案、9c 每一步都查的打分对比。
+- [写一个字要搬多少](https://mgcpngn.github.io/ai-infra-journey/labs/one-word-time.html)（[源码](labs/one-word-time.html)）：1 月-1～1 月-3。拖动权重字节、KV cache 字节、用户数，看「要搬的字节 ÷ 每秒能搬多少」算出的时间，和 vLLM 实测对一对；4 道新问题。
 
 也可以下载 HTML 文件后用浏览器直接打开。
 
@@ -149,6 +150,7 @@ journal/         按日期的学习日志：关键领悟和被纠正的误解
 10. **不懂的概念，先做成能点着玩的网页游戏。** 不要指望用户直接读懂代码；先用游戏看懂过程，再对照代码。所有网页放在 labs/，并在首页 index.html 加一张卡片，统一从 https://mgcpngn.github.io/ai-infra-journey/ 进入。（10-29 定，用户提出：「需要可视化把我不能理解的东西做成可视化的网页游戏让我真正的理解，不要指望我直接理解代码」）
 11. **按难度给用户选题。** 太难、太容易的题都学不到东西（和 RL 一样）。每道复习题和预测记下 ✅ ⚠️ ❌，按结果选下一次的题；用户的回答要有思路、过程、结果 3 部分。做法和记录见 [method/difficulty.md](method/difficulty.md)。（10-29 定，用户提出）
 12. **实验说名字，不只说编号。** 例如「直接写答案（9b）」「先写过程（9c）」「调用计算器（9d）」「两步应用题（9e）」「先筛题（9f）」。（10-29 定，用户说「9b 是啥我也忘记了」）
+13. **每个实验先由用户写出问题和预测，再跑。** 跑之前用户写：这次要回答什么问题、预测、为什么；写不出来就不跑，先讲懂（网页游戏）。Claude 只写命令和脚本。跑完用户说结果和预测对不对、猜想哪里要改。（11-09 定，用户提出：「如果都是你在干，我都不知道自己的价值和作用如何体现……做完我不认为我理解了什么」）
 
 **暂存区**（以后用到再学）：AdamW 两个数各自怎么算、fp8 的两种分法、参数初始化（起点怎么选）。
 - 比较模型好坏看验证 loss 和实际数字，不只看百分比或单次生成的诗。

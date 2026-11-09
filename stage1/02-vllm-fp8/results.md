@@ -10,7 +10,17 @@
 | `Selected CutlassFP8ScaledMMLinearKernel for Fp8PerTensorOnlineLinearMethod` | 乘法用 fp8 的算子直接算，不是先还原（第 5 步那种） |
 | `Quantizing 112 layers of types: mlp.down_proj: 28; mlp.gate_up_proj: 28; self_attn.o_proj: 28; self_attn.qkv_proj: 28` | 28 层 × 4 种 = 112 个转成 fp8。词表那一层（embed_tokens / lm_head）不在里面，还是 bf16 |
 
-模型占多少、KV cache：待补（`Model loading took`、`GPU KV cache size`）。
+| 日志原文 | bf16（11-09） | fp8 |
+|---|---|---|
+| `Model loading took ... GiB` | 1.12 GiB | 0.71 GiB |
+| `Available KV cache memory` | 4.39 GiB | 4.8 GiB |
+| `GPU KV cache size` | 41,136 tokens | 44,928 tokens |
+| `Maximum concurrency for 2,048 tokens` | 20.09x | 21.94x |
+
+核对（Claude 算）：
+- 0.71 GiB：440,467,456 × 1 + 155,582,464 × 2 = 751,632,384 字节 = 0.700 GiB。对上了，词表那一层确实没转。
+- 权重省了 1.12 − 0.71 = 0.41 GiB；KV cache 多了 4.8 − 4.39 = 0.41 GiB。省下来的显存全给了 KV cache。
+- 每个 token 的 KV cache 没变：4.8 GiB ÷ 44,928 ≈ 112 KiB，4.39 GiB ÷ 41,136 ≈ 112 KiB。日志里 `kv_cache_dtype=auto`：KV cache 还是 bf16，只有权重转了 fp8。
 
 ## 2. 并发测试（bench.py，没改）
 | N | 总吞吐 tok/s | TTFT ms | TPOT ms | 请求时间 s | 显存 MiB |

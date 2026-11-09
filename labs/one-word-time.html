@@ -75,7 +75,7 @@ svg text { fill: var(--muted); font-size: 11px; font-family: var(--mono) }
   <div class="lv">第 0 关 · 为什么要搬</div>
   <h2>仓库、推车和灶台</h2>
   <p><b>显存</b>像远处的仓库：8 GB，放得下全部参数（28 层）。<b>计算单元</b>像灶台：炒得很快，但身边几乎放不下东西。<br>
-  写一个字，这个字要走过全部 28 层，每一层都要用这一层的参数做乘法。所以每写一个字，28 层的参数都要用推车从仓库送到灶台一遍，用完就丢。推车每秒能送 208.2 GB，这就是<b>显存带宽</b>。</p>
+  写一个字，这个字要走过全部 28 层，每一层都要用这一层的参数做乘法。所以每写一个字，28 层的参数（还有最后打分用的整张词表，图里没单独画）都要用推车从仓库送到灶台一遍，用完就丢。推车每秒能送 208.2 GB，这就是<b>显存带宽</b>。</p>
   <div class="seg"><button id="go0">写一个字</button></div>
   <div class="scroll"><svg id="kitchen" viewBox="0 0 640 220" width="100%" style="min-width:420px" role="img" aria-label="参数从显存一层一层送到计算单元"></svg></div>
   <p class="big">已经送了 <b class="mono" id="l0">0</b> / 28 层，<b class="mono" id="g0">0.00</b> GB，用时 <b class="mono" id="t0">0.00</b> ms</p>

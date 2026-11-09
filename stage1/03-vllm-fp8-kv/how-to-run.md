@@ -35,3 +35,14 @@ kill $PID
 ## 先预测
 1. 每个 token 的 KV cache 从 112 KiB 变成多少？能放的 token（1 月-2 是 44,928）约几倍？
 2. batch 64 每个字（1 月-2 是 10.58 ms）会变快吗？为什么？batch 1 呢？
+
+## 一次跑完：sweep.sh（11-09 加）
+用户：「重启服务跑测试然后再重复，这个过程非常磨人没有价值」。改成一个脚本，4 种设置（bf16、fp8 权重、A、B）各跑 3 次，人不用守着：
+```bash
+conda activate vllm
+cd ~/ai-infra-journey-git/stage1/03-vllm-fp8-kv
+bash sweep.sh
+```
+- 每次启动服务约 70 秒（11-09 日志 `init engine ... took 66.22 s`），加上测试，12 次一共约 20 分钟（推测）。
+- 每次的日志和结果在 runs/ 里；最后 summary.py 打印每种设置 3 次的中位数和最小～最大。
+- 要改设置：改 sweep.sh 里的 CONFIGS，一行一种。

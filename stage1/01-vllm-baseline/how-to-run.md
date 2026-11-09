@@ -57,3 +57,20 @@ N   tok/s   TTFT_ms  TPOT_ms  E2E_s  GPU_MiB
 - 实测 6.03 ms，是天花板的 1.05 倍。
 
 我之前说的 4.7 ms 是用显卡标称带宽 256 GB/s 算的（凭记忆，未核实），不是实测，以 5.73 ms 为准。
+
+## 6. 只用一个终端（11-09 加）
+11-09 用户在新环境里只运行了 bench.py，没有先开服务，报 `Connect call failed ('127.0.0.1', 8000)`。下面整段一起粘进一个终端就行：
+```bash
+conda activate vllm      # 11-09 新建的环境：vllm 0.32.0、torch 2.13.0+cu130
+cd ~/ai-infra-journey-git/stage1/01-vllm-baseline
+HF_HUB_OFFLINE=1 VLLM_USE_FLASHINFER_SAMPLER=0 \
+nohup vllm serve Qwen/Qwen3-0.6B-Base --max-model-len 2048 --gpu-memory-utilization 0.8 --port 8000 > server.log 2>&1 &
+PID=$!
+until curl -s localhost:8000/v1/models > /dev/null; do
+  sleep 2
+  if ! kill -0 $PID 2>/dev/null; then echo "服务没起来"; tail -20 server.log; break; fi
+done
+python bench.py
+grep -E "Model loading took|KV cache|Maximum concurrency" server.log
+kill $PID
+```

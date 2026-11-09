@@ -41,3 +41,20 @@ python ../01-vllm-baseline/bench.py
 - 其余 440,467,456 个 × 1 字节 + 155,582,464 × 2 字节 ≈ 0.752 GB。
 - ÷ 实测带宽 208.2 GB/s ≈ **3.61 ms**（基线天花板 5.73 ms）。
 跑完对一下：「模型占多少」是不是约 0.70 GiB，就知道词表那一层有没有转。
+
+## 5. 只用一个终端
+和基线 how-to-run.md 第 6 节一样，只是文件夹和启动命令不同：
+```bash
+conda activate vllm
+cd ~/ai-infra-journey-git/stage1/02-vllm-fp8
+HF_HUB_OFFLINE=1 VLLM_USE_FLASHINFER_SAMPLER=0 \
+nohup vllm serve Qwen/Qwen3-0.6B-Base --quantization fp8 --max-model-len 2048 --gpu-memory-utilization 0.8 --port 8000 > server.log 2>&1 &
+PID=$!
+until curl -s localhost:8000/v1/models > /dev/null; do
+  sleep 2
+  if ! kill -0 $PID 2>/dev/null; then echo "服务没起来"; tail -20 server.log; break; fi
+done
+python ../01-vllm-baseline/bench.py
+grep -E "Model loading took|KV cache|Maximum concurrency" server.log
+kill $PID
+```

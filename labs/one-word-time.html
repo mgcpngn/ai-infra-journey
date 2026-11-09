@@ -72,6 +72,17 @@ svg text { fill: var(--muted); font-size: 11px; font-family: var(--mono) }
 </header>
 
 <section>
+  <div class="lv">第 0 关 · 为什么要搬</div>
+  <h2>仓库、推车和灶台</h2>
+  <p><b>显存</b>像远处的仓库：8 GB，放得下全部参数（28 层）。<b>计算单元</b>像灶台：炒得很快，但身边几乎放不下东西。<br>
+  写一个字，这个字要走过全部 28 层，每一层都要用这一层的参数做乘法。所以每写一个字，28 层的参数都要用推车从仓库送到灶台一遍，用完就丢。推车每秒能送 208.2 GB，这就是<b>显存带宽</b>。</p>
+  <div class="seg"><button id="go0">写一个字</button></div>
+  <div class="scroll"><svg id="kitchen" viewBox="0 0 640 220" width="100%" style="min-width:420px" role="img" aria-label="参数从显存一层一层送到计算单元"></svg></div>
+  <p class="big">已经送了 <b class="mono" id="l0">0</b> / 28 层，<b class="mono" id="g0">0.00</b> GB，用时 <b class="mono" id="t0">0.00</b> ms</p>
+  <p class="muted">推车送完 28 层要 5.73 ms（1.19 GB ÷ 208.2 GB/s）。你在 vLLM 测的 batch 1 每个字（TPOT）是 6.03 ms，几乎就是推车的时间：<b>厨师在等推车</b>。这里的动画放慢了很多倍。</p>
+</section>
+
+<section>
   <div class="lv">第 1 关 · 拖一拖</div>
   <h2>每写一个字，要搬两样东西</h2>
   <p><b style="color:var(--blue)">权重</b>：全部参数。不管几个用户，每写一个字都搬一遍。<br>
@@ -208,6 +219,42 @@ QUIZ.forEach((item, qi) => {
   $("quiz").appendChild(box);
 });
 draw();
+
+// 第 0 关：推车一层一层送参数
+const K0 = { done: 0, x: 0, run: false };
+function kitchen() {
+  let s = `<rect x="10" y="20" width="230" height="180" rx="6" fill="var(--soft)" stroke="var(--line)"/>
+    <text x="20" y="38">显存（仓库）8 GB</text>
+    <rect x="470" y="70" width="160" height="80" rx="6" fill="var(--soft)" stroke="var(--line)"/>
+    <text x="480" y="88">计算单元（灶台）</text>
+    <line x1="245" x2="465" y1="110" y2="110" stroke="var(--line)" stroke-width="2" stroke-dasharray="4 4"/>
+    <text x="300" y="100">208.2 GB/s</text>`;
+  for (let i = 0; i < 28; i++) {
+    const c = i % 7, r = Math.floor(i / 7);
+    const used = i < K0.done;
+    s += `<rect x="${22 + c * 30}" y="${50 + r * 36}" width="24" height="28" rx="3" fill="${used ? "var(--soft)" : "var(--blue)"}" stroke="var(--blue)"/>
+      <text x="${34 + c * 30}" y="${68 + r * 36}" text-anchor="middle" style="fill:${used ? "var(--muted)" : "#fff"}">${i + 1}</text>`;
+  }
+  if (K0.run) s += `<rect x="${250 + K0.x * 190}" y="96" width="24" height="28" rx="3" fill="var(--blue)"/><text x="${262 + K0.x * 190}" y="114" text-anchor="middle" style="fill:#fff">${K0.done + 1}</text>`;
+  if (K0.done === 28) s += `<text x="480" y="130" style="fill:var(--green)">写出 1 个字</text>`;
+  $("kitchen").innerHTML = s;
+  $("l0").textContent = K0.done;
+  $("g0").textContent = (WB.bf16 * K0.done / 28 / 1e9).toFixed(2);
+  $("t0").textContent = (5.73 * K0.done / 28).toFixed(2);
+}
+$("go0").onclick = () => {
+  if (K0.run) return;
+  K0.done = 0; K0.x = 0; K0.run = true; let last = null;
+  const step = ts => {
+    if (last === null) last = ts;
+    K0.x += (ts - last) / 140; last = ts;
+    if (K0.x >= 1) { K0.x = 0; K0.done++; }
+    if (K0.done >= 28) { K0.run = false; kitchen(); return; }
+    kitchen(); requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+};
+kitchen();
 </script>
 </body>
 </html>

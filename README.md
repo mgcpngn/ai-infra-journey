@@ -14,6 +14,8 @@
 
 **怎么改进这个项目**：[高度、深度、广度](method/altitude-depth-range.md)（2026-10-18）· [账本](ledger.md)：每一步测出来的数放在一起
 
+**Codex 教练入口**：[项目约定](AGENTS.md) · [当前学习进度](method/coaching-state.md) · [下次复习素材](method/next-session.md)。在 Codex 中打开这个仓库后，说“继续学习”，教练按最新记录接续；新回答、实验结果和下一步都写回仓库。
+
 **学习方式**：代码交给 Claude Code 写，我负责三件事：
 
 1. 写提示词，让 Agent 实现实验

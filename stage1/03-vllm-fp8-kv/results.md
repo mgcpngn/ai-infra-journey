@@ -15,10 +15,10 @@
 - KV cache 能放的 token：44,928 → 89,920，2.00 倍。每个 token 112 KiB → 56 KiB（每个数 2 字节 → 1 字节）。
 - TPOT：N=1 4.61 → 4.37；N=64 10.58 → 8.05（快 24%）。
 - TTFT 变慢：N=1 23.4 → 32.6；N=64 95.8 → 159.2。
-- 这次同时换了 KV cache 和注意力算法，速度变化分不清是哪一个造成的。要跑 A（只换 TRITON_ATTN）。
+- 这次同时换了 KV cache 和注意力算法，因此补跑下文的 A 对照（只换 TRITON_ATTN）。
 
 ## A：权重 fp8 + KV cache bf16 + TRITON_ATTN
-（日志还没贴，按命令推测 KV cache 约 44,928 tokens。）
+原始输出保存在本地 `stage1/01-vllm-baseline/`。`server.log:7` 记录 `quantization: fp8` 和 `attention_backend: TRITON_ATTN`，第 48 行记录 `GPU KV cache size: 44,960 tokens`。`bench.json` 的各行数据与下面的 A 表一致。
 
 | N | 总吞吐 tok/s | TTFT ms | TPOT ms | 请求时间 s | 显存 MiB |
 |---|---|---|---|---|---|
